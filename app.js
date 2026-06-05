@@ -352,12 +352,43 @@ function renderAdminStock(stock) {
     <div class="grid2">
       <div><label>교사 큰손 매수</label><input id="teacherBuyShares" type="number" min="1"><button onclick="teacherBuyStock()">매수</button></div>
       <div><label>교사 큰손 매도</label><input id="teacherSellShares" type="number" min="1"><button onclick="teacherSellStock()">매도</button></div>
+    </div>
+    <div class="mini" style="margin-top:14px;">
+      <h3>관리자 주식 설정 변경</h3>
+      <p class="small">증자, 거래소 보유금 보정, 최고가/최저가 변경처럼 실제 거래가 아닌 운영 조정에 사용하세요. 변경 기록은 로그에 남아요.</p>
+      <div class="grid3">
+        <div><label>현재 주가</label><input id="stockSetCurrentPrice" type="number" min="0" value="${s.currentPrice ?? 100}"></div>
+        <div><label>시장 보유 주식</label><input id="stockSetMarketShares" type="number" min="0" value="${s.marketShares ?? 0}"></div>
+        <div><label>교사 보유 주식</label><input id="stockSetTeacherShares" type="number" min="0" value="${s.teacherShares ?? 0}"></div>
+        <div><label>거래소 보유금</label><input id="stockSetExchangeFund" type="number" min="0" value="${s.exchangeFund ?? 0}"></div>
+        <div><label>1인 보유 한도</label><input id="stockSetPerStudentLimit" type="number" min="0" value="${s.perStudentLimit ?? 20}"></div>
+        <div><label>순매수 1주당 주가 반영값</label><input id="stockSetPriceWeight" type="number" min="0" step="0.1" value="${s.priceWeight ?? 1}"></div>
+        <div><label>일일 등락 제한(%)</label><input id="stockSetDailyLimitRate" type="number" min="0" max="100" step="1" value="${Math.round(Number(s.dailyLimitRate ?? 0.3) * 100)}"></div>
+        <div><label>최저 주가</label><input id="stockSetMinPrice" type="number" min="0" value="${s.minPrice ?? 1}"></div>
+        <div><label>최고 주가</label><input id="stockSetMaxPrice" type="number" min="0" value="${s.maxPrice ?? 200}"></div>
+      </div>
+      <label><input id="stockSetResetDay" type="checkbox" checked> 오늘 거래량 초기화</label>
+      <label><input id="stockSetForceClose" type="checkbox"> 장 상태를 마감으로 변경</label>
+      <button class="purple" onclick="updateStockSettings()">주식 설정 저장</button>
     </div>`;
 }
 window.openStockMarket = async () => actionStatus("adminStockStatus", "openStockMarket", {}, loadAdminStock);
 window.closeStockMarket = async () => actionStatus("adminStockStatus", "closeStockMarket", {}, loadAdminStock);
 window.teacherBuyStock = async () => actionStatus("adminStockStatus", "teacherBuyStock", { shares: qs("teacherBuyShares").value }, loadAdminStock);
 window.teacherSellStock = async () => actionStatus("adminStockStatus", "teacherSellStock", { shares: qs("teacherSellShares").value }, loadAdminStock);
+window.updateStockSettings = async () => actionStatus("adminStockStatus", "updateStockSettings", {
+  currentPrice: qs("stockSetCurrentPrice").value,
+  marketShares: qs("stockSetMarketShares").value,
+  teacherShares: qs("stockSetTeacherShares").value,
+  exchangeFund: qs("stockSetExchangeFund").value,
+  perStudentLimit: qs("stockSetPerStudentLimit").value,
+  priceWeight: qs("stockSetPriceWeight").value,
+  dailyLimitRate: qs("stockSetDailyLimitRate").value,
+  minPrice: qs("stockSetMinPrice").value,
+  maxPrice: qs("stockSetMaxPrice").value,
+  resetDayCounters: qs("stockSetResetDay").checked,
+  forceCloseMarket: qs("stockSetForceClose").checked
+}, loadAdminStock);
 window.addStockNews = async () => actionStatus("adminStockStatus", "addStockNews", { title: qs("stockNewsTitle").value, body: qs("stockNewsBody").value }, () => { qs("stockNewsTitle").value = ""; qs("stockNewsBody").value = ""; loadAdminStock(); });
 
 window.loadAdminDeposits = async function() {
@@ -471,8 +502,25 @@ window.claimDeposit = async id => actionStatus("studentMoneyStatus", "claimDepos
 window.cancelDepositEarly = async id => { if (confirm("중도해지하면 이자를 거의 받지 못해요. 해지할까요?")) await actionStatus("studentMoneyStatus", "cancelDepositEarly", { depositId: id }, loadStudentSummary); };
 function renderStudentFunding(list) {
   const box = qs("studentFundingBox");
-  if (!list.length) { box.innerHTML = '<p class="small">진행 중인 펀딩이 없어요.</p>'; return; }
-  box.innerHTML = list.map(c => `<div class="mini"><h3>${escapeHtml(c.title)}</h3><p>${escapeHtml(c.description)}</p><p><b>${formatMoney(c.currentAmount)}</b> / ${formatMoney(c.targetAmount)}</p><div class="progress"><div style="width:${c.progress}%"></div></div><input id="fundingAmount_${c.campaignId}" type="number" placeholder="참여 금액"><button class="purple" onclick="contributeFunding('${escapeJs(c.campaignId)}')">펀딩 참여</button></div>`).join("");
+  if (!list.length) { box.innerHTML = '<p class="small">표시할 펀딩이 없어요.</p>'; return; }
+  box.innerHTML = list.map(c => {
+    const summary = c.contributionSummary || [];
+    const rows = summary.length
+      ? summary.map(x => `<tr><td>${escapeHtml(x.userName || x.userId)}</td><td>${formatMoney(x.totalAmount)}</td><td>${x.count}회</td></tr>`).join("")
+      : '<tr><td colspan="3">아직 참여자가 없어요.</td></tr>';
+    const recent = (c.contributions || []).slice(0, 8).map(x => `<tr><td>${escapeHtml(x.timestamp)}</td><td>${escapeHtml(x.userName || x.userId)}</td><td>${formatMoney(x.amount)}</td></tr>`).join("");
+    const canContribute = c.status === "ACTIVE";
+    return `<div class="mini">
+      <h3>${escapeHtml(c.title)} ${statusBadge(c.status)}</h3>
+      <p>${escapeHtml(c.description)}</p>
+      <p><b>${formatMoney(c.currentAmount)}</b> / ${formatMoney(c.targetAmount)}</p>
+      <div class="progress"><div style="width:${c.progress}%"></div></div>
+      ${canContribute ? `<input id="fundingAmount_${c.campaignId}" type="number" placeholder="참여 금액"><button class="purple" onclick="contributeFunding('${escapeJs(c.campaignId)}')">펀딩 참여</button>` : `<p class="small">${c.status === "COMPLETED" ? "목표를 달성한 펀딩이에요." : "현재 참여가 중지된 펀딩이에요."}</p>`}
+      <h4>참여자 합계</h4>
+      <div class="tableWrap"><table><thead><tr><th>학생</th><th>총 펀딩액</th><th>참여 횟수</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <details style="margin-top:10px;"><summary class="small">최근 참여 기록 보기</summary><div class="tableWrap"><table><thead><tr><th>시간</th><th>학생</th><th>금액</th></tr></thead><tbody>${recent || '<tr><td colspan="3">기록이 없어요.</td></tr>'}</tbody></table></div></details>
+    </div>`;
+  }).join("");
 }
 window.contributeFunding = async id => actionStatus("studentFundingStatus", "contributeFunding", { campaignId: id, amount: qs("fundingAmount_" + id).value }, loadStudentSummary);
 function renderStudentFundingHistory(list) {
