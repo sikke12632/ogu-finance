@@ -234,7 +234,7 @@ function renderManagedStudents(list) {
     const lockBtn = s.status === "LOCKED"
       ? `<button class="green smallBtn" onclick="unlockUser('${escapeJs(s.userId)}')">잠금해제</button>`
       : `<button class="danger smallBtn" onclick="lockUser('${escapeJs(s.userId)}')">잠금</button>`;
-    body.insertAdjacentHTML("beforeend", `<tr><td>${escapeHtml(s.userId)}</td><td>${escapeHtml(s.name)}</td><td>${statusBadge(s.status)}</td><td>${formatMoney(s.balance)}</td><td>${s.shares || 0}주</td><td>${formatMoney(s.pendingWithdrawal)}</td><td>${s.bankerPermission === "YES" ? '<span class="badge purple">YES</span>' : "NO"}<br>${bankerBtn}</td><td>${s.mustChangePassword === "YES" ? '<span class="badge yellow">필요</span>' : "완료"}<br><button class="smallBtn" onclick="resetUserPassword('${escapeJs(s.userId)}')">1234 초기화</button></td><td>${lockBtn}</td></tr>`);
+    body.insertAdjacentHTML("beforeend", `<tr><td>${escapeHtml(s.userId)}</td><td>${escapeHtml(s.name)}</td><td>${statusBadge(s.status)}</td><td>${formatMoney(s.balance)}</td><td>${s.shares || 0}주</td><td>${formatMoney(s.pendingWithdrawal)}</td><td>${s.bankerPermission === "YES" ? '<span class="badge purple">YES</span>' : "NO"}<br>${bankerBtn}</td><td>${s.mustChangePassword === "YES" ? '<span class="badge yellow">필요</span>' : "완료"}<br><button class="smallBtn" onclick="resetUserPassword('${escapeJs(s.userId)}')">123456 초기화</button></td><td>${lockBtn}</td></tr>`);
   });
 }
 function renderBankers(list) {
@@ -265,7 +265,7 @@ window.bulkRejectStudents = async function() {
 window.grantBankerPermission = async id => actionStatus("bankerStatus", "grantBankerPermission", { studentId: id }, loadAdminAccounts);
 window.revokeBankerPermission = async id => actionStatus("bankerStatus", "revokeBankerPermission", { studentId: id }, loadAdminAccounts);
 window.resetUserPassword = async id => {
-  if (confirm(`${id} 계정의 비밀번호를 1234로 초기화할까요?`)) await actionStatus("adminStatus", "resetUserPassword", { targetUserId: id }, loadAdminAccounts);
+  if (confirm(`${id} 계정의 비밀번호를 123456으로 초기화할까요?`)) await actionStatus("adminStatus", "resetUserPassword", { targetUserId: id }, loadAdminAccounts);
 };
 window.lockUser = async id => actionStatus("adminStatus", "lockUser", { targetUserId: id }, loadAdminAccounts);
 window.unlockUser = async id => actionStatus("adminStatus", "unlockUser", { targetUserId: id }, loadAdminAccounts);
