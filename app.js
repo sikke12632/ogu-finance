@@ -516,9 +516,9 @@ function renderStudentFunding(list) {
       <p><b>${formatMoney(c.currentAmount)}</b> / ${formatMoney(c.targetAmount)}</p>
       <div class="progress"><div style="width:${c.progress}%"></div></div>
       ${canContribute ? `<input id="fundingAmount_${c.campaignId}" type="number" placeholder="참여 금액"><button class="purple" onclick="contributeFunding('${escapeJs(c.campaignId)}')">펀딩 참여</button>` : `<p class="small">${c.status === "COMPLETED" ? "목표를 달성한 펀딩이에요." : "현재 참여가 중지된 펀딩이에요."}</p>`}
-      <h4>참여자 합계</h4>
+      <h4>펀딩 참여자 합계</h4>
       <div class="tableWrap"><table><thead><tr><th>학생</th><th>총 펀딩액</th><th>참여 횟수</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <details style="margin-top:10px;"><summary class="small">최근 참여 기록 보기</summary><div class="tableWrap"><table><thead><tr><th>시간</th><th>학생</th><th>금액</th></tr></thead><tbody>${recent || '<tr><td colspan="3">기록이 없어요.</td></tr>'}</tbody></table></div></details>
+      <details style="margin-top:10px;"><summary class="small">펀딩 참여자 최근 기록 보기</summary><div class="tableWrap"><table><thead><tr><th>시간</th><th>학생</th><th>금액</th></tr></thead><tbody>${recent || '<tr><td colspan="3">기록이 없어요.</td></tr>'}</tbody></table></div></details>
     </div>`;
   }).join("");
 }
