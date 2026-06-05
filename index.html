@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>오구반 금융센터</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="wrap">
+  <section id="loginPage" class="centerBox">
+    <div class="logo">
+      <div class="logoTitle">오구반 금융센터</div>
+      <div class="logoSub">GitHub Pages + Firebase 이전판</div>
+    </div>
+
+    <div class="card">
+      <div class="modeTabs">
+        <button id="loginModeBtn" class="active" onclick="showLoginMode()">로그인</button>
+        <button id="signupModeBtn" onclick="showSignupMode()">학생 회원가입</button>
+      </div>
+
+      <div id="loginBox">
+        <h2>로그인</h2>
+        <label>아이디</label><input id="loginId" type="text" placeholder="예: student01">
+        <label>비밀번호</label><input id="loginPw" type="password" placeholder="비밀번호" onkeydown="if(event.key==='Enter') login();">
+        <button id="loginBtn" onclick="login()">로그인</button>
+        <button class="light" onclick="showSetupBox()">초기 관리자 만들기</button>
+        <div id="loginStatus" class="status hidden"></div>
+      </div>
+
+      <div id="signupBox" class="hidden">
+        <h2>학생 회원가입</h2>
+        <div class="notice">가입 요청 후 선생님이 승인하면 로그인할 수 있어요.</div>
+        <label>아이디</label><input id="signupId" type="text" placeholder="영문/숫자/_ 3~20자">
+        <label>이름</label><input id="signupName" type="text" placeholder="예: 김민수">
+        <label>비밀번호</label><input id="signupPw" type="password" placeholder="4자 이상">
+        <label>가입코드</label><input id="signupCode" type="text" placeholder="선생님이 알려준 코드">
+        <button id="signupBtn" class="blue" onclick="requestSignup()">가입 요청</button>
+        <button class="light" onclick="showLoginMode()">로그인으로 돌아가기</button>
+        <div id="signupStatus" class="status hidden"></div>
+      </div>
+    </div>
+
+    <div id="setupBox" class="card hidden">
+      <h2>초기 관리자 만들기</h2>
+      <div class="dangerNotice">처음 한 번만 사용해요. 이미 관리자 계정이 있으면 실행되지 않아요.</div>
+      <label>초기세팅 코드</label><input id="setupKey" type="password" placeholder="functions/.env의 SETUP_KEY">
+      <label>관리자 아이디</label><input id="setupAdminId" type="text" value="teacher">
+      <label>관리자 이름</label><input id="setupAdminName" type="text" value="관리자">
+      <label>관리자 비밀번호</label><input id="setupAdminPw" type="password" placeholder="관리자 비밀번호">
+      <button class="blue" onclick="setupInitialAdmin()">초기 관리자 생성</button>
+      <div id="setupStatus" class="status hidden"></div>
+    </div>
+  </section>
+
+  <section id="forcePasswordPage" class="centerBox hidden">
+    <div class="card">
+      <h1>비밀번호 재설정</h1>
+      <div class="dangerNotice">초기화된 비밀번호로 로그인했어요. 새 비밀번호를 설정해야 계속 사용할 수 있어요.</div>
+      <p id="forcePasswordUserInfo" class="small"></p>
+      <label>새 비밀번호</label><input id="newMyPassword" type="password">
+      <label>새 비밀번호 확인</label><input id="newMyPasswordConfirm" type="password">
+      <button class="blue" onclick="changeMyPassword()">비밀번호 변경</button>
+      <button class="light" onclick="logoutNow()">로그아웃</button>
+      <div id="forcePasswordStatus" class="status hidden"></div>
+    </div>
+  </section>
+
+  <section id="adminPage" class="hidden">
+    <div class="topbar">
+      <div><h1>관리자 화면</h1><span id="adminInfo" class="badge">관리자</span><span class="badge blue">Firebase판</span></div>
+      <button class="danger" onclick="logoutNow()">로그아웃</button>
+    </div>
+
+    <div class="card">
+      <h2>상태 확인</h2>
+      <div class="grid">
+        <div class="mini"><h3>전체 학생</h3><strong id="studentCount">-</strong></div>
+        <div class="mini"><h3>활성 학생</h3><strong id="activeStudentCount">-</strong></div>
+        <div class="mini"><h3>승인대기</h3><strong id="pendingStudentCount">-</strong></div>
+        <div class="mini"><h3>은행원</h3><strong id="bankerCount">-</strong></div>
+      </div>
+      <p class="small">학생 가입코드: <b id="signupCodeText">-</b> · 비밀번호 초기화값: <b id="resetPasswordText">-</b></p>
+    </div>
+
+    <div class="card">
+      <h2>관리 메뉴</h2>
+      <div class="tabs">
+        <button class="active" id="adminTabAccountsBtn" onclick="showAdminTab('accounts')">계정</button>
+        <button id="adminTabMoneyBtn" onclick="showAdminTab('money')">입출금/지급</button>
+        <button id="adminTabStockBtn" onclick="showAdminTab('stock')">주식</button>
+        <button id="adminTabDepositBtn" onclick="showAdminTab('deposit')">예금</button>
+        <button id="adminTabFundingBtn" onclick="showAdminTab('funding')">펀딩</button>
+        <button id="adminTabInflationBtn" onclick="showAdminTab('inflation')">인플레이션</button>
+        <button id="adminTabLogsBtn" onclick="showAdminTab('logs')">기록/로그</button>
+      </div>
+
+      <div id="adminAccountsTab">
+        <h2>승인대기 학생</h2>
+        <button class="secondary" onclick="loadAdminAccounts()">학생 목록 새로고침</button>
+        <button class="green" onclick="bulkApproveStudents()">선택 일괄승인</button>
+        <button class="danger" onclick="bulkRejectStudents()">선택 일괄거절</button>
+        <div id="studentApprovalStatus" class="status hidden"></div>
+        <div class="tableWrap"><table><thead><tr><th>선택</th><th>아이디</th><th>이름</th><th>가입요청</th><th>처리</th></tr></thead><tbody id="pendingBody"></tbody></table></div>
+
+        <h2>활성 학생 계정 관리</h2>
+        <div class="tableWrap"><table><thead><tr><th>아이디</th><th>이름</th><th>상태</th><th>잔액</th><th>주식</th><th>출금대기</th><th>은행원 권한</th><th>비번변경</th><th>관리</th></tr></thead><tbody id="studentsManageBody"></tbody></table></div>
+
+        <h2>은행원 권한 보유자</h2>
+        <div id="bankerStatus" class="status hidden"></div>
+        <div class="tableWrap"><table><thead><tr><th>아이디</th><th>이름</th><th>종류</th><th>상태</th><th>권한</th><th>관리</th></tr></thead><tbody id="bankersBody"></tbody></table></div>
+
+        <h2>학생 계정 직접 생성</h2>
+        <div class="grid3">
+          <div><label>학생 아이디</label><input id="newStudentId" placeholder="student01"></div>
+          <div><label>학생 이름</label><input id="newStudentName" placeholder="김민수"></div>
+          <div><label>초기 비밀번호</label><input id="newStudentPw" placeholder="1234는 사용하지 않기"></div>
+        </div>
+        <button onclick="createStudent()">학생 계정 생성</button>
+
+        <h2>은행원 전용 계정 생성</h2>
+        <div class="grid2">
+          <div><label>은행원 아이디</label><input id="newBankerId" placeholder="banker01"></div>
+          <div><label>은행원 이름</label><input id="newBankerName" placeholder="은행원"></div>
+        </div>
+        <button class="purple" onclick="createBanker()">은행원 계정 생성</button>
+        <div id="adminStatus" class="status hidden"></div>
+      </div>
+
+      <div id="adminMoneyTab" class="hidden">
+        <h2>입출금 요청 감독</h2>
+        <button class="secondary" onclick="loadAdminMoney()">입출금 요청 새로고침</button>
+        <button class="green" onclick="bulkApproveMoneyRequests('admin')">선택 일괄승인</button>
+        <div id="adminMoneyStatus" class="status hidden"></div>
+        <div class="tableWrap"><table><thead><tr><th>선택</th><th>학생</th><th>종류</th><th>금액</th><th>신청시간</th><th>처리</th></tr></thead><tbody id="adminPendingMoneyBody"></tbody></table></div>
+
+        <h2>관리자 수동 지급/차감</h2>
+        <p class="small">월급, 보너스, 벌금처럼 시트 없이 바로 처리할 수 있는 대체 기능이에요. 모든 내역은 기록/로그에 남아요.</p>
+        <div class="grid3">
+          <div><label>학생 선택</label><select id="adjustStudentSelect"></select></div>
+          <div><label>처리 종류</label><select id="adjustMode"><option value="ADD">지급</option><option value="SUBTRACT">차감</option></select></div>
+          <div><label>금액</label><input id="adjustAmount" type="number" min="1" placeholder="예: 500"></div>
+        </div>
+        <label>메모</label><input id="adjustNote" placeholder="예: 6월 1주차 월급">
+        <button class="blue" onclick="adjustWallet()">처리하기</button>
+        <div id="adjustStatus" class="status hidden"></div>
+      </div>
+
+      <div id="adminStockTab" class="hidden">
+        <h2>주식 장 운영</h2>
+        <button class="secondary" onclick="loadAdminStock()">주식 현황 새로고침</button>
+        <div id="adminStockBox" class="panelText">불러오는 중이에요.</div>
+        <div id="adminStockStatus" class="status hidden"></div>
+        <h2>뉴스 등록</h2>
+        <label>제목</label><input id="stockNewsTitle" placeholder="예: 오구회사 신제품 인기">
+        <label>내용</label><textarea id="stockNewsBody" placeholder="학생들에게 보여줄 뉴스"></textarea>
+        <button class="blue" onclick="addStockNews()">뉴스 등록</button>
+      </div>
+
+      <div id="adminDepositTab" class="hidden">
+        <h2>예금 상품 관리</h2>
+        <button class="secondary" onclick="loadAdminDeposits()">예금 상품 불러오기</button>
+        <div class="grid3">
+          <div><label>상품명</label><input id="depositProductName" placeholder="특별 2주 예금"></div>
+          <div><label>만기 주차</label><input id="depositWeeks" type="number"></div>
+          <div><label>이율(%)</label><input id="depositRate" type="number" step="0.1"></div>
+          <div><label>중도해지 지급률(%)</label><input id="depositPenalty" type="number" step="1" value="10"></div>
+          <div><label>최소 금액</label><input id="depositMin" type="number" value="1"></div>
+          <div><label>최대 금액</label><input id="depositMax" type="number" value="1000000"></div>
+        </div>
+        <button class="green" onclick="createDepositProduct()">상품 추가</button>
+        <div id="adminDepositStatus" class="status hidden"></div>
+        <div class="tableWrap"><table><thead><tr><th>상품</th><th>만기</th><th>이율</th><th>중도해지</th><th>상태</th><th>관리</th></tr></thead><tbody id="adminDepositProductsBody"></tbody></table></div>
+      </div>
+
+      <div id="adminFundingTab" class="hidden">
+        <h2>펀딩 관리</h2>
+        <button class="secondary" onclick="loadAdminFunding()">펀딩 목록 불러오기</button>
+        <div class="grid3">
+          <div><label>제목</label><input id="fundingTitle"></div>
+          <div><label>목표 금액</label><input id="fundingTarget" type="number"></div>
+          <div><label>설명</label><input id="fundingDesc"></div>
+        </div>
+        <button class="purple" onclick="createFundingCampaign()">펀딩 생성</button>
+        <div id="adminFundingStatus" class="status hidden"></div>
+        <div class="tableWrap"><table><thead><tr><th>제목</th><th>설명</th><th>목표</th><th>현재</th><th>상태</th><th>관리</th></tr></thead><tbody id="adminFundingBody"></tbody></table></div>
+      </div>
+
+      <div id="adminInflationTab" class="hidden">
+        <h2>인플레이션 점검</h2>
+        <button class="secondary" onclick="loadAdminInflation()">인플레이션 계산하기</button>
+        <div class="grid">
+          <div class="mini"><h3>예상 학생 총자산</h3><strong id="inflationProjectedAssets">-</strong></div>
+          <div class="mini"><h3>시스템 순입금</h3><strong id="inflationNetPrincipal">-</strong></div>
+          <div class="mini"><h3>증가액</h3><strong id="inflationIncreasedAmount">-</strong></div>
+          <div class="mini"><h3>증가율</h3><strong id="inflationRate">-</strong></div>
+        </div>
+        <div id="inflationRiskText" class="status hidden"></div>
+        <div class="tableWrap"><table><thead><tr><th>학생</th><th>지갑</th><th>주식</th><th>주식 평가액</th><th>예금 만기예상액</th><th>환산 총자산</th></tr></thead><tbody id="inflationStudentsBody"></tbody></table></div>
+      </div>
+
+      <div id="adminLogsTab" class="hidden">
+        <h2>기록/로그 대체 기능</h2>
+        <p class="small">기존 구글 시트 바로가기 대신 이 화면에서 거래·로그를 확인하고 CSV로 내려받을 수 있어요.</p>
+        <button class="secondary" onclick="loadLogs()">기록 새로고침</button>
+        <button class="green" onclick="downloadCurrentLogCsv()">현재 표 CSV 다운로드</button>
+        <div class="tabs">
+          <button id="logTabLogsBtn" class="active" onclick="showLogTab('logs')">전체 로그</button>
+          <button id="logTabWalletBtn" onclick="showLogTab('wallet')">지갑 거래</button>
+          <button id="logTabMoneyBtn" onclick="showLogTab('money')">입출금 신청</button>
+          <button id="logTabStockBtn" onclick="showLogTab('stock')">주식 거래</button>
+          <button id="logTabDepositBtn" onclick="showLogTab('deposit')">예금 기록</button>
+          <button id="logTabFundingBtn" onclick="showLogTab('funding')">펀딩 기록</button>
+        </div>
+        <div id="logsStatus" class="status hidden"></div>
+        <div class="tableWrap"><table id="logsTable"><thead id="logsHead"></thead><tbody id="logsBody"></tbody></table></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="bankerPage" class="hidden">
+    <div class="topbar"><div><h1>은행원 화면</h1><span class="badge purple" id="bankerInfo">은행원</span></div><button class="danger" onclick="logoutNow()">로그아웃</button></div>
+    <div class="card"><h2 id="bankerMessage">은행원 정보를 불러오는 중이에요.</h2><button class="secondary" onclick="loadBankerSummary()">새로고침</button><button class="green" onclick="bulkApproveMoneyRequests('banker')">선택 일괄승인</button><div id="bankerMoneyStatus" class="status hidden"></div><div class="tableWrap"><table><thead><tr><th>선택</th><th>학생</th><th>종류</th><th>금액</th><th>신청시간</th><th>처리</th></tr></thead><tbody id="bankerPendingMoneyBody"></tbody></table></div></div>
+    <div class="card"><h2>최근 입출금 처리 기록</h2><div class="tableWrap"><table><thead><tr><th>학생</th><th>종류</th><th>금액</th><th>상태</th><th>신청시간</th><th>처리자</th></tr></thead><tbody id="bankerRecentMoneyBody"></tbody></table></div></div>
+  </section>
+
+  <section id="studentPage" class="hidden">
+    <div class="topbar"><div><h1>학생 화면</h1><span class="badge green" id="studentInfo">학생</span></div><button class="danger" onclick="logoutNow()">로그아웃</button></div>
+    <div class="card">
+      <h2 id="studentMessage">접속 정보를 불러오는 중이에요.</h2>
+      <div class="grid3">
+        <div class="mini"><h3>총 디지털 오구</h3><div class="money" id="studentBalance">-</div></div>
+        <div class="mini"><h3>출금대기 오구</h3><div class="money" id="studentPendingWithdrawal">-</div></div>
+        <div class="mini"><h3>사용 가능 오구</h3><div class="money" id="studentAvailableBalance">-</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tabs">
+        <button id="tabStockBtn" class="active" onclick="showStudentTab('stock')">주식창</button>
+        <button id="tabBankBtn" onclick="showStudentTab('bank')">은행창</button>
+        <button id="tabFundingBtn" onclick="showStudentTab('funding')">펀딩창</button>
+        <button id="tabStudentBankerBtn" class="hidden" onclick="showStudentTab('studentBanker')">은행원 업무</button>
+        <button id="tabHistoryBtn" onclick="showStudentTab('history')">내 기록</button>
+      </div>
+
+      <div id="stockTab"><h2>주식창</h2><div id="studentStockBox">불러오는 중이에요.</div><div id="studentStockStatus" class="status hidden"></div></div>
+      <div id="bankTab" class="hidden">
+        <h2>은행창</h2>
+        <div class="grid2">
+          <div class="mini"><h3>입금 신청</h3><label>입금할 오구</label><input id="depositAmount" type="number" step="100"><button class="blue" onclick="createMoneyRequest('DEPOSIT')">입금 신청</button></div>
+          <div class="mini"><h3>출금 신청</h3><label>출금할 오구</label><input id="withdrawAmount" type="number" step="100"><button class="purple" onclick="createMoneyRequest('WITHDRAW')">출금 신청</button></div>
+        </div>
+        <div id="studentMoneyStatus" class="status hidden"></div>
+        <h3>예금 상품</h3><div id="studentDepositProductsBox"></div>
+        <h3>내 예금</h3><div id="studentDepositsBox"></div>
+        <h3>내 입출금 신청 내역</h3><div class="tableWrap"><table><thead><tr><th>종류</th><th>금액</th><th>상태</th><th>신청시간</th><th>처리시간</th></tr></thead><tbody id="studentMoneyRequestsBody"></tbody></table></div>
+      </div>
+      <div id="fundingTab" class="hidden"><h2>펀딩창</h2><div id="studentFundingBox"></div><div id="studentFundingStatus" class="status hidden"></div><h3>내 펀딩 기록</h3><div id="studentFundingHistoryBox"></div></div>
+      <div id="studentBankerTab" class="hidden"><h2>은행원 업무</h2><button class="secondary" onclick="loadStudentSummary()">새로고침</button><button class="green" onclick="bulkApproveMoneyRequests('studentBanker')">선택 일괄승인</button><div id="studentBankerMoneyStatus" class="status hidden"></div><div class="tableWrap"><table><thead><tr><th>선택</th><th>학생</th><th>종류</th><th>금액</th><th>신청시간</th><th>처리</th></tr></thead><tbody id="studentBankerPendingMoneyBody"></tbody></table></div><h3>최근 처리 기록</h3><div class="tableWrap"><table><thead><tr><th>학생</th><th>종류</th><th>금액</th><th>상태</th><th>신청시간</th><th>처리자</th></tr></thead><tbody id="studentBankerRecentMoneyBody"></tbody></table></div></div>
+      <div id="historyTab" class="hidden"><h2>내 기록</h2><div class="tableWrap"><table><thead><tr><th>시간</th><th>종류</th><th>금액</th><th>잔액 변화</th><th>대기금 변화</th><th>내용</th></tr></thead><tbody id="studentWalletTxBody"></tbody></table></div></div>
+    </div>
+  </section>
+</div>
+
+<script src="./firebase-config.js"></script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
