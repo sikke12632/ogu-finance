@@ -338,6 +338,14 @@ window.loadAdminStock = async function() {
 };
 function renderAdminStock(stock) {
   const s = stock.settings || {};
+  const m = stock.marketStats || {};
+  const recentTrades = stock.recentTrades || [];
+  const net = Number(m.netBuy || 0);
+  const netText = net > 0 ? `+${net}주` : `${net}주`;
+  const closeReason = s.lastCloseAdminReason || s.lastCloseReason || "아직 장마감 설명이 없어요.";
+  const tradesHtml = recentTrades.length
+    ? `<div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>시간</th><th>이름</th><th>종류</th><th>수량</th><th>가격</th><th>보유 변화</th></tr></thead><tbody>${recentTrades.map(t => `<tr><td>${escapeHtml(t.timestamp)}</td><td>${escapeHtml(t.name || t.userId || "-")}</td><td>${escapeHtml(t.tradeType)}</td><td>${t.shares || 0}주</td><td>${formatMoney(t.price || 0)}</td><td>${t.beforeShares ?? "-"} → ${t.afterShares ?? "-"}</td></tr>`).join("")}</tbody></table></div>`
+    : '<p class="small">최근 거래가 없어요.</p>';
   qs("adminStockBox").innerHTML = `
     <div class="grid3">
       <div class="mini"><h3>현재 주가</h3><strong>${formatMoney(s.currentPrice)}</strong></div>
@@ -345,13 +353,28 @@ function renderAdminStock(stock) {
       <div class="mini"><h3>시장 보유 주식</h3><strong>${s.marketShares || 0}주</strong></div>
       <div class="mini"><h3>교사 보유</h3><strong>${s.teacherShares || 0}주</strong></div>
       <div class="mini"><h3>거래소 보유금</h3><strong>${formatMoney(s.exchangeFund)}</strong></div>
-      <div class="mini"><h3>일일 순매수</h3><strong>${(s.dayStudentBuy||0)+(s.dayTeacherBuy||0)-(s.dayStudentSell||0)-(s.dayTeacherSell||0)}주</strong></div>
+      <div class="mini"><h3>전체 순매수</h3><strong>${netText}</strong></div>
     </div>
+    <div class="mini" style="margin-top:14px;">
+      <h3>실시간 거래량판</h3>
+      <div class="grid3">
+        <div class="mini"><h3>학생 매수/매도</h3><strong>${m.studentBuy || 0} / ${m.studentSell || 0}주</strong></div>
+        <div class="mini"><h3>큰손 매수/매도</h3><strong>${m.teacherBuy || 0} / ${m.teacherSell || 0}주</strong></div>
+        <div class="mini"><h3>예상 마감가</h3><strong>${formatMoney(m.expectedClosePrice ?? s.currentPrice)}</strong><p class="small">${escapeHtml(m.direction || "보합 가능")}</p></div>
+      </div>
+    </div>
+    <div class="mini" style="margin-top:14px;"><h3>최근 장마감 설명</h3><p>${escapeHtml(closeReason)}</p></div>
     <button class="green" onclick="openStockMarket()">장 열기</button>
     <button class="danger" onclick="closeStockMarket()">장 마감</button>
+    <button class="secondary" onclick="loadAdminStock()">거래량 새로고침</button>
     <div class="grid2">
       <div><label>교사 큰손 매수</label><input id="teacherBuyShares" type="number" min="1"><button onclick="teacherBuyStock()">매수</button></div>
       <div><label>교사 큰손 매도</label><input id="teacherSellShares" type="number" min="1"><button onclick="teacherSellStock()">매도</button></div>
+    </div>
+    <div class="mini" style="margin-top:14px;">
+      <h3>최근 거래 내역</h3>
+      <p class="small">교사 화면에는 학생 실명 거래와 큰손 거래가 모두 보입니다.</p>
+      ${tradesHtml}
     </div>
     <div class="mini" style="margin-top:14px;">
       <h3>관리자 주식 설정 변경</h3>
@@ -478,8 +501,33 @@ window.showStudentTab = function(tab) {
 function renderStudentStock(stock) {
   const s = stock.settings || {};
   const h = stock.holding || { shares: 0 };
+  const m = stock.marketStats || {};
+  const net = Number(m.netBuy || 0);
+  const netText = net > 0 ? `+${net}주` : `${net}주`;
+  const lastReason = s.lastCloseReason || "아직 장마감 설명이 없어요.";
   const news = (stock.news || []).map(n => `<div class="mini"><b>${escapeHtml(n.title)}</b><p>${escapeHtml(n.body)}</p><p class="small">${escapeHtml(n.createdAt)}</p></div>`).join("") || '<p class="small">등록된 뉴스가 없어요.</p>';
-  qs("studentStockBox").innerHTML = `<div class="grid3"><div class="mini"><h3>현재 주가</h3><strong>${formatMoney(s.currentPrice)}</strong></div><div class="mini"><h3>장 상태</h3><strong>${s.marketOpen === "OPEN" ? "열림" : "마감"}</strong></div><div class="mini"><h3>내 보유 주식</h3><strong>${h.shares || 0}주</strong></div></div><div class="grid2"><div><label>매수할 주식 수</label><input id="buyShares" type="number" min="1"><button class="green" onclick="buyStock()">매수</button></div><div><label>매도할 주식 수</label><input id="sellShares" type="number" min="1"><button class="purple" onclick="sellStock()">매도</button></div></div><h3>뉴스</h3>${news}`;
+  qs("studentStockBox").innerHTML = `
+    <div class="grid3">
+      <div class="mini"><h3>현재 주가</h3><strong>${formatMoney(s.currentPrice)}</strong></div>
+      <div class="mini"><h3>장 상태</h3><strong>${s.marketOpen === "OPEN" ? "열림" : "마감"}</strong></div>
+      <div class="mini"><h3>내 보유 주식</h3><strong>${h.shares || 0}주</strong></div>
+    </div>
+    <div class="mini" style="margin-top:14px;">
+      <h3>오늘의 시장 분위기</h3>
+      <p class="small">학생 화면에서는 개인 이름 없이 전체 거래량만 보여요. 큰손 거래도 익명으로 합산됩니다.</p>
+      <div class="grid3">
+        <div class="mini"><h3>전체 매수</h3><strong>${m.totalBuy || 0}주</strong></div>
+        <div class="mini"><h3>전체 매도</h3><strong>${m.totalSell || 0}주</strong></div>
+        <div class="mini"><h3>현재 순매수</h3><strong>${netText}</strong></div>
+      </div>
+      <p><b>장마감 예상:</b> ${escapeHtml(m.direction || "보합 가능")} · 예상가 ${formatMoney(m.expectedClosePrice ?? s.currentPrice)}</p>
+    </div>
+    <div class="mini" style="margin-top:14px;"><h3>최근 주가 변동 이유</h3><p>${escapeHtml(lastReason)}</p></div>
+    <div class="grid2">
+      <div><label>매수할 주식 수</label><input id="buyShares" type="number" min="1"><button class="green" onclick="buyStock()">매수</button></div>
+      <div><label>매도할 주식 수</label><input id="sellShares" type="number" min="1"><button class="purple" onclick="sellStock()">매도</button></div>
+    </div>
+    <h3>뉴스</h3>${news}`;
 }
 window.buyStock = async () => actionStatus("studentStockStatus", "buyStock", { shares: qs("buyShares").value }, loadStudentSummary);
 window.sellStock = async () => actionStatus("studentStockStatus", "sellStock", { shares: qs("sellShares").value }, loadStudentSummary);
