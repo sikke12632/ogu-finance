@@ -343,6 +343,10 @@ function renderAdminStock(stock) {
   const net = Number(m.netBuy || 0);
   const netText = net > 0 ? `+${net}주` : `${net}주`;
   const closeReason = s.lastCloseAdminReason || s.lastCloseReason || "아직 장마감 설명이 없어요.";
+  const adminNews = stock.news || [];
+  const adminNewsHtml = adminNews.length
+    ? `<div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>구분</th><th>제목</th><th>내용</th><th>등록시각</th><th>관리</th></tr></thead><tbody>${adminNews.map(n => `<tr><td>${n.type === "CLOSE_MARKET" ? "장마감" : "일반"}</td><td>${escapeHtml(n.title)}</td><td>${escapeHtml(n.body || "")}</td><td>${escapeHtml(n.createdAt || "")}</td><td><button class="danger smallBtn" onclick="deleteStockNews('${escapeJs(n.newsId || n.id)}')">삭제</button></td></tr>`).join("")}</tbody></table></div>`
+    : '<p class="small">등록된 뉴스가 없어요.</p>';
   const tradesHtml = recentTrades.length
     ? `<div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>시간</th><th>이름</th><th>종류</th><th>수량</th><th>가격</th><th>보유 변화</th></tr></thead><tbody>${recentTrades.map(t => `<tr><td>${escapeHtml(t.timestamp)}</td><td>${escapeHtml(t.name || t.userId || "-")}</td><td>${escapeHtml(t.tradeType)}</td><td>${t.shares || 0}주</td><td>${formatMoney(t.price || 0)}</td><td>${t.beforeShares ?? "-"} → ${t.afterShares ?? "-"}</td></tr>`).join("")}</tbody></table></div>`
     : '<p class="small">최근 거래가 없어요.</p>';
@@ -375,6 +379,18 @@ function renderAdminStock(stock) {
       <h3>최근 거래 내역</h3>
       <p class="small">교사 화면에는 학생 실명 거래와 큰손 거래가 모두 보입니다.</p>
       ${tradesHtml}
+    </div>
+    <div class="mini" style="margin-top:14px;">
+      <h3>뉴스 등록/삭제</h3>
+      <p class="small">장마감하면 [장마감 소식] 뉴스가 자동 등록됩니다. 테스트 중 생긴 뉴스나 오래된 뉴스는 여기서 삭제하세요.</p>
+      <div class="grid2">
+        <div><label>뉴스 제목</label><input id="stockNewsTitle" placeholder="예: 오구 주식회사, 신제품 인기"></div>
+        <div><label>뉴스 내용</label><input id="stockNewsBody" placeholder="학생들이 읽을 투자 힌트나 시장 소식을 적어 주세요."></div>
+      </div>
+      <button class="green" onclick="addStockNews()">뉴스 등록</button>
+      <h3 style="margin-top:14px;">현재 뉴스 목록</h3>
+      <p class="small">학생 화면에는 최신 뉴스 3개만 크게 보이고, 장마감 뉴스는 최신 1개만 보여요.</p>
+      ${adminNewsHtml}
     </div>
     <div class="mini" style="margin-top:14px;">
       <h3>관리자 주식 설정 변경</h3>
@@ -413,6 +429,10 @@ window.updateStockSettings = async () => actionStatus("adminStockStatus", "updat
   forceCloseMarket: qs("stockSetForceClose").checked
 }, loadAdminStock);
 window.addStockNews = async () => actionStatus("adminStockStatus", "addStockNews", { title: qs("stockNewsTitle").value, body: qs("stockNewsBody").value }, () => { qs("stockNewsTitle").value = ""; qs("stockNewsBody").value = ""; loadAdminStock(); });
+window.deleteStockNews = async id => {
+  if (!confirm("이 뉴스를 삭제할까요? 삭제하면 학생 화면에서도 사라집니다.")) return;
+  await actionStatus("adminStockStatus", "deleteStockNews", { newsId: id }, loadAdminStock);
+};
 
 window.loadAdminDeposits = async function() {
   try {
@@ -505,8 +525,12 @@ function renderStudentStock(stock) {
   const net = Number(m.netBuy || 0);
   const netText = net > 0 ? `+${net}주` : `${net}주`;
   const lastReason = s.lastCloseReason || "아직 장마감 설명이 없어요.";
-  const news = (stock.news || []).map(n => `<div class="mini"><b>${escapeHtml(n.title)}</b><p>${escapeHtml(n.body)}</p><p class="small">${escapeHtml(n.createdAt)}</p></div>`).join("") || '<p class="small">등록된 뉴스가 없어요.</p>';
+  const newsList = stock.news || [];
+  const news = newsList.length
+    ? `<div style="border:2px solid #f6ad55;border-radius:14px;padding:14px;background:#fffaf0;margin-bottom:14px;"><h2 style="margin:0 0 8px 0;">📰 오늘의 오구 뉴스</h2><p class="small">최신 뉴스 3개만 보여요. 장마감 소식은 가장 최근 것 1개만 표시됩니다.</p>${newsList.map((n, idx) => `<div class="mini" style="background:white;border-left:5px solid #ed8936;margin-top:10px;"><b>${idx === 0 ? '<span style="display:inline-block;background:#e53e3e;color:white;border-radius:999px;padding:2px 8px;margin-right:6px;font-size:12px;">NEW</span>' : ''}${escapeHtml(n.title)}</b><p style="font-size:15px;line-height:1.5;">${escapeHtml(n.body || "")}</p><p class="small">${escapeHtml(n.createdAt || "")}</p></div>`).join("")}</div>`
+    : '<div style="border:2px solid #f6ad55;border-radius:14px;padding:14px;background:#fffaf0;margin-bottom:14px;"><h2 style="margin:0;">📰 오늘의 오구 뉴스</h2><p class="small">등록된 뉴스가 없어요.</p></div>';
   qs("studentStockBox").innerHTML = `
+    ${news}
     <div class="grid3">
       <div class="mini"><h3>현재 주가</h3><strong>${formatMoney(s.currentPrice)}</strong></div>
       <div class="mini"><h3>장 상태</h3><strong>${s.marketOpen === "OPEN" ? "열림" : "마감"}</strong></div>
@@ -526,8 +550,7 @@ function renderStudentStock(stock) {
     <div class="grid2">
       <div><label>매수할 주식 수</label><input id="buyShares" type="number" min="1"><button class="green" onclick="buyStock()">매수</button></div>
       <div><label>매도할 주식 수</label><input id="sellShares" type="number" min="1"><button class="purple" onclick="sellStock()">매도</button></div>
-    </div>
-    <h3>뉴스</h3>${news}`;
+    </div>`;
 }
 window.buyStock = async () => actionStatus("studentStockStatus", "buyStock", { shares: qs("buyShares").value }, loadStudentSummary);
 window.sellStock = async () => actionStatus("studentStockStatus", "sellStock", { shares: qs("sellShares").value }, loadStudentSummary);
