@@ -649,6 +649,405 @@ window.showLogTab = function(tab) {
   };
   renderLogTable(configs[tab]);
 };
+
+window.updateStockSettings = async () => actionStatus("adminStockStatus", "updateStockSettings", {
+  currentPrice: stockSettingValueV4("stockSetCurrentPrice"),
+  marketTrend: currentSelectedStockTrendV4(stockLastAdminStockV4),
+  updateIntervalSeconds: stockSettingValueV4("stockSetUpdateIntervalSeconds"),
+  marketShares: stockSettingValueV4("stockSetMarketShares"),
+  teacherShares: stockSettingValueV4("stockSetTeacherShares"),
+  exchangeFund: stockSettingValueV4("stockSetExchangeFund"),
+  perStudentLimit: stockSettingValueV4("stockSetPerStudentLimit"),
+  priceWeight: stockSettingValueV4("stockSetPriceWeight"),
+  trendMoveStep: stockSettingValueV4("stockSetTrendMoveStep"),
+  tradeImpactShares: stockSettingValueV4("stockSetTradeImpactShares"),
+  tradeImpactMaxMove: stockSettingValueV4("stockSetTradeImpactMaxMove"),
+  dailyLimitRate: stockSettingValueV4("stockSetDailyLimitRate"),
+  minPrice: stockSettingValueV4("stockSetMinPrice"),
+  maxPrice: stockSettingValueV4("stockSetMaxPrice"),
+  baseSpread: stockSettingValueV4("stockSetBaseSpread"),
+  volatileSpread: stockSettingValueV4("stockSetVolatileSpread"),
+  buyFeeRate: stockSettingValueV4("stockSetBuyFeeRate"),
+  sellFeeRate: stockSettingValueV4("stockSetSellFeeRate"),
+  feeMode: stockSettingValueV4("stockSetFeeMode"),
+  linkedFundingCampaignId: stockSettingValueV4("stockSetLinkedFundingCampaignId"),
+  resetDayCounters: stockSettingCheckedV4("stockSetResetDay"),
+  forceCloseMarket: stockSettingCheckedV4("stockSetForceClose")
+}, loadAdminStock);
+
+renderAdminStock = renderAdminStockV4;
+renderStudentStock = renderStudentStockV4;
+
+function stockSettingValueV4(id) {
+  return qs(id)?.value ?? "";
+}
+
+function stockSettingCheckedV4(id) {
+  return Boolean(qs(id)?.checked);
+}
+
+window.openStockMarket = async () => actionStatus("adminStockStatus", "openStockMarket", {
+  marketTrend: currentSelectedStockTrendV4(stockLastAdminStockV4)
+}, loadAdminStock);
+
+window.closeStockMarket = async () => {
+  clearInterval(stockAutoTickTimerV4);
+  stockAutoTickTimerV4 = null;
+  await actionStatus("adminStockStatus", "closeStockMarket", {}, loadAdminStock);
+};
+
+window.tickStockMarket = async () => actionStatus("adminStockStatus", "tickStockMarket", {}, loadAdminStock);
+
+window.updateStockSettings = async () => actionStatus("adminStockStatus", "updateStockSettings", {
+  currentPrice: stockSettingValueV4("stockSetCurrentPrice"),
+  marketTrend: currentSelectedStockTrendV4(stockLastAdminStockV4),
+  updateIntervalSeconds: stockSettingValueV4("stockSetUpdateIntervalSeconds"),
+  marketShares: stockSettingValueV4("stockSetMarketShares"),
+  teacherShares: stockSettingValueV4("stockSetTeacherShares"),
+  exchangeFund: stockSettingValueV4("stockSetExchangeFund"),
+  perStudentLimit: stockSettingValueV4("stockSetPerStudentLimit"),
+  priceWeight: stockSettingValueV4("stockSetPriceWeight"),
+  trendMoveStep: stockSettingValueV4("stockSetTrendMoveStep"),
+  tradeImpactShares: stockSettingValueV4("stockSetTradeImpactShares"),
+  tradeImpactMaxMove: stockSettingValueV4("stockSetTradeImpactMaxMove"),
+  dailyLimitRate: stockSettingValueV4("stockSetDailyLimitRate"),
+  minPrice: stockSettingValueV4("stockSetMinPrice"),
+  maxPrice: stockSettingValueV4("stockSetMaxPrice"),
+  baseSpread: stockSettingValueV4("stockSetBaseSpread"),
+  volatileSpread: stockSettingValueV4("stockSetVolatileSpread"),
+  buyFeeRate: stockSettingValueV4("stockSetBuyFeeRate"),
+  sellFeeRate: stockSettingValueV4("stockSetSellFeeRate"),
+  feeMode: stockSettingValueV4("stockSetFeeMode"),
+  linkedFundingCampaignId: stockSettingValueV4("stockSetLinkedFundingCampaignId"),
+  resetDayCounters: stockSettingCheckedV4("stockSetResetDay"),
+  forceCloseMarket: stockSettingCheckedV4("stockSetForceClose")
+}, loadAdminStock);
+
+const showAdminTabBeforeStockV4 = window.showAdminTab;
+window.showAdminTab = function(tab) {
+  if (tab !== "stock") {
+    clearInterval(stockAutoTickTimerV4);
+    stockAutoTickTimerV4 = null;
+  }
+  return showAdminTabBeforeStockV4(tab);
+};
+
+renderAdminStock = renderAdminStockV4;
+renderStudentStock = renderStudentStockV4;
+
+// Stock UI v4: cleaner test-page style controls for the operating app.
+var stockAutoTickTimerV4 = null;
+var stockLastAdminStockV4 = null;
+
+function stockTrendOptionsV4(stock) {
+  const fromServer = Array.isArray(stock?.trendRules) && stock.trendRules.length ? stock.trendRules : null;
+  return fromServer || [
+    { key: "SURGE", label: "급등장" },
+    { key: "BULL", label: "강세장" },
+    { key: "MIXED", label: "혼조세" },
+    { key: "BEAR", label: "약세장" },
+    { key: "CRASH", label: "급락장" }
+  ];
+}
+
+function stockTrendLabelV4(stock, key) {
+  return stockTrendOptionsV4(stock).find(item => item.key === key)?.label || key || "혼조세";
+}
+
+function currentSelectedStockTrendV4(stock) {
+  return document.querySelector(".stockTrendButton.active")?.dataset.trend
+    || stock?.settings?.marketTrend
+    || "MIXED";
+}
+
+window.selectStockTrend = function(trend) {
+  document.querySelectorAll(".stockTrendButton").forEach(button => {
+    button.classList.toggle("active", button.dataset.trend === trend);
+  });
+};
+
+function renderStockChartV4(canvasId, history, fallbackPrice = 100) {
+  const canvas = qs(canvasId);
+  if (!canvas) return;
+  const values = (Array.isArray(history) ? history : [])
+    .map(v => Math.max(1, Math.round(stockNum(v, fallbackPrice))))
+    .filter(v => Number.isFinite(v));
+  if (!values.length) values.push(Math.max(1, Math.round(stockNum(fallbackPrice, 100))));
+
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  const pad = 34;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(1, max - min);
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = "#e5e7eb";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 5; i += 1) {
+    const y = pad + ((height - pad * 2) / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(pad, y);
+    ctx.lineTo(width - pad, y);
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = "#2563eb";
+  ctx.lineWidth = 4;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  values.forEach((value, index) => {
+    const x = values.length === 1 ? width / 2 : pad + ((width - pad * 2) * index) / (values.length - 1);
+    const y = height - pad - ((value - min) / range) * (height - pad * 2);
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  ctx.fillStyle = "#111827";
+  ctx.font = "14px Arial";
+  ctx.fillText(`${max.toLocaleString("ko-KR")}오구`, pad, 22);
+  ctx.fillText(`${min.toLocaleString("ko-KR")}오구`, pad, height - 10);
+}
+
+function startStockAutoTickV4(stock) {
+  clearInterval(stockAutoTickTimerV4);
+  stockAutoTickTimerV4 = null;
+  if (!stock || currentRole !== "admin" || stock.settings?.marketOpen !== "OPEN") return;
+  const seconds = Math.max(1, Math.floor(stockNum(stock.settings.updateIntervalSeconds, 5)));
+  stockAutoTickTimerV4 = setInterval(async () => {
+    try {
+      const res = await call("tickStockMarket", {});
+      if (res && !res.skipped) await loadAdminStock();
+    } catch {
+      clearInterval(stockAutoTickTimerV4);
+      stockAutoTickTimerV4 = null;
+    }
+  }, seconds * 1000);
+}
+
+function renderAutoNewsV4(newsList) {
+  const list = (newsList || []).slice(0, 3);
+  if (!list.length) return '<p class="small">자동 뉴스가 아직 없어요. 장을 열면 장세에 맞는 뉴스가 생성됩니다.</p>';
+  return list.map(n => `<div class="stockNewsItemV4"><b>${escapeHtml(n.title)}</b><p>${escapeHtml(n.body || "")}</p><p class="small">${escapeHtml(n.createdAt || "")}</p></div>`).join("");
+}
+
+function fundingOptionsV4(stock) {
+  const s = stock.settings || {};
+  const linkedId = s.linkedFundingCampaignId || "";
+  const campaigns = stock.fundingCampaigns || [];
+  return [
+    `<option value="">펀딩 연결 안 함</option>`,
+    ...campaigns.map(c => `<option value="${escapeHtml(c.campaignId || c.id)}" ${linkedId === (c.campaignId || c.id) ? "selected" : ""}>${escapeHtml(c.title)} (${formatMoney(c.currentAmount)} / ${formatMoney(c.targetAmount)})</option>`)
+  ].join("");
+}
+
+function renderAdminStockV4(stock) {
+  stockLastAdminStockV4 = stock;
+  const s = stock.settings || {};
+  const m = stock.marketStats || {};
+  const prices = getStockPrices(stock);
+  const trendKey = s.marketTrend || prices.marketTrend || "MIXED";
+  const trendButtons = stockTrendOptionsV4(stock).map(item => (
+    `<button class="stockTrendButton ${item.key === trendKey ? "active" : ""}" data-trend="${escapeHtml(item.key)}" onclick="selectStockTrend('${escapeJs(item.key)}')">${escapeHtml(item.label)}</button>`
+  )).join("");
+  const linkedFunding = stock.linkedFunding;
+  const linkedText = s.linkedFundingCampaignId ? (linkedFunding?.title || "선택한 펀딩") : "연결 안 함";
+
+  qs("adminStockBox").innerHTML = `
+    <div class="stockHeroV4">
+      <div>
+        <p class="small">오늘의 장세</p>
+        <h2>${escapeHtml(stockTrendLabelV4(stock, trendKey))}</h2>
+      </div>
+      <div>
+        <p class="small">현재가</p>
+        <strong>${formatMoney(prices.currentPrice)}</strong>
+      </div>
+      <div>
+        <p class="small">장 상태</p>
+        <strong>${stockMarketLabel(s.marketOpen)}</strong>
+      </div>
+      <div>
+        <p class="small">자동 갱신</p>
+        <strong>${Math.max(1, stockNum(s.updateIntervalSeconds, 5))}초</strong>
+      </div>
+    </div>
+
+    <div class="stockPanelV4">
+      <div class="sectionHeadV4">
+        <div>
+          <h3>장세 선택</h3>
+          <p class="small">장을 열 때 선택한 장세에 맞춰 자동 뉴스와 가격 흐름이 만들어집니다.</p>
+        </div>
+        <span class="badge blue">${escapeHtml(linkedText)}</span>
+      </div>
+      <div class="segmentedV4">${trendButtons}</div>
+      <div class="buttonRowV4">
+        <button class="green" onclick="openStockMarket()">장 열기</button>
+        <button class="danger" onclick="closeStockMarket()">장 마감</button>
+        <button class="secondary" onclick="loadAdminStock()">새로고침</button>
+        <button class="blue" onclick="tickStockMarket()">가격 1회 갱신</button>
+      </div>
+    </div>
+
+    <div class="stockPanelV4">
+      <div class="sectionHeadV4"><h3>가격 그래프</h3><span class="badge">${m.direction || "보합 가능"}</span></div>
+      <canvas id="adminStockChartV4" class="stockChart stockChartV4" width="720" height="260"></canvas>
+      <div class="grid3 stockMetricGridV4">
+        <div class="mini"><h3>매수가</h3><strong>${formatMoney(prices.buyPrice)}</strong></div>
+        <div class="mini"><h3>매도가</h3><strong>${formatMoney(prices.sellPrice)}</strong></div>
+        <div class="mini"><h3>예상 마감가</h3><strong>${formatMoney(m.expectedClosePrice ?? prices.currentPrice)}</strong></div>
+      </div>
+    </div>
+
+    <div class="stockPanelV4">
+      <h3>자동 뉴스</h3>
+      ${renderAutoNewsV4(stock.news)}
+    </div>
+
+    <div class="stockPanelV4">
+      <h3>운영 설정</h3>
+      <div class="grid3">
+        <div><label>현재 주가</label><input id="stockSetCurrentPrice" type="number" min="1" value="${s.currentPrice ?? 100}"></div>
+        <div><label>가격 갱신 간격(초)</label><input id="stockSetUpdateIntervalSeconds" type="number" min="1" value="${s.updateIntervalSeconds ?? 5}"></div>
+        <div><label>일일 등락 한도(%)</label><input id="stockSetDailyLimitRate" type="number" min="0" max="100" step="0.1" value="${stockRateInput(s.dailyLimitRate ?? 0.1)}"></div>
+        <div><label>기본 스프레드</label><input id="stockSetBaseSpread" type="number" min="0" value="${s.baseSpread ?? 1}"></div>
+        <div><label>급등/급락 스프레드</label><input id="stockSetVolatileSpread" type="number" min="0" value="${s.volatileSpread ?? 3}"></div>
+        <div><label>장세 영향값</label><input id="stockSetTrendMoveStep" type="number" min="0" step="0.1" value="${s.trendMoveStep ?? 1}"></div>
+        <div><label>거래량 반영 기준(주)</label><input id="stockSetTradeImpactShares" type="number" min="1" value="${s.tradeImpactShares ?? 10}"></div>
+        <div><label>거래량 최대 반영값</label><input id="stockSetTradeImpactMaxMove" type="number" min="0" value="${s.tradeImpactMaxMove ?? 8}"></div>
+        <div><label>순매수 1주당 반영값</label><input id="stockSetPriceWeight" type="number" min="0" step="0.1" value="${s.priceWeight ?? 1}"></div>
+        <div><label>매수 수수료(%)</label><input id="stockSetBuyFeeRate" type="number" min="0" max="100" step="0.1" value="${stockRateInput(s.buyFeeRate ?? 0.05)}"></div>
+        <div><label>매도 수수료(%)</label><input id="stockSetSellFeeRate" type="number" min="0" max="100" step="0.1" value="${stockRateInput(s.sellFeeRate ?? 0.05)}"></div>
+        <div><label>수수료 처리</label><select id="stockSetFeeMode">
+          <option value="split" ${s.feeMode === "split" ? "selected" : ""}>70% 소멸 + 30% 펀딩</option>
+          <option value="funding" ${s.feeMode === "funding" ? "selected" : ""}>전액 펀딩</option>
+          <option value="burn" ${s.feeMode === "burn" ? "selected" : ""}>전액 소멸</option>
+          <option value="treasury" ${s.feeMode === "treasury" ? "selected" : ""}>학급 금고</option>
+        </select></div>
+        <div><label>연동할 펀딩</label><select id="stockSetLinkedFundingCampaignId">${fundingOptionsV4(stock)}</select></div>
+      </div>
+      <details class="stockAdvancedV4">
+        <summary>고급 재고/한도 설정</summary>
+        <div class="grid3">
+          <div><label>시장 보유 주식</label><input id="stockSetMarketShares" type="number" min="0" value="${s.marketShares ?? 0}"></div>
+          <div><label>교사 보유 주식</label><input id="stockSetTeacherShares" type="number" min="0" value="${s.teacherShares ?? 0}"></div>
+          <div><label>거래소 보유금</label><input id="stockSetExchangeFund" type="number" min="0" value="${s.exchangeFund ?? 0}"></div>
+          <div><label>1인 보유 한도</label><input id="stockSetPerStudentLimit" type="number" min="0" value="${s.perStudentLimit ?? 20}"></div>
+          <div><label>최저 주가</label><input id="stockSetMinPrice" type="number" min="1" value="${s.minPrice ?? 1}"></div>
+          <div><label>최고 주가</label><input id="stockSetMaxPrice" type="number" min="1" value="${s.maxPrice ?? 200}"></div>
+        </div>
+      </details>
+      <label><input id="stockSetResetDay" type="checkbox" checked> 오늘 거래량 초기화</label>
+      <label><input id="stockSetForceClose" type="checkbox"> 장 상태를 마감으로 변경</label>
+      <button class="purple" onclick="updateStockSettings()">설정 저장</button>
+    </div>
+
+    <div class="stockPanelV4">
+      <h3>수수료 현황</h3>
+      <div class="grid3">
+        <div class="mini"><h3>총 수수료</h3><strong>${formatMoney(s.stockFeeTotal || 0)}</strong></div>
+        <div class="mini"><h3>소멸</h3><strong>${formatMoney(s.stockFeeBurned || 0)}</strong></div>
+        <div class="mini"><h3>펀딩 적립</h3><strong>${formatMoney(s.stockFeeFunding || 0)}</strong></div>
+      </div>
+    </div>`;
+
+  requestAnimationFrame(() => renderStockChartV4("adminStockChartV4", s.priceHistory, prices.currentPrice));
+  startStockAutoTickV4(stock);
+}
+
+window.openStockMarket = async () => actionStatus("adminStockStatus", "openStockMarket", { marketTrend: currentSelectedStockTrendV4(stockLastAdminStockV4) }, loadAdminStock);
+window.closeStockMarket = async () => {
+  clearInterval(stockAutoTickTimerV4);
+  stockAutoTickTimerV4 = null;
+  await actionStatus("adminStockStatus", "closeStockMarket", {}, loadAdminStock);
+};
+window.tickStockMarket = async () => actionStatus("adminStockStatus", "tickStockMarket", {}, loadAdminStock);
+
+window.updateStockSettings = async () => actionStatus("adminStockStatus", "updateStockSettings", {
+  currentPrice: qs("stockSetCurrentPrice").value,
+  marketTrend: currentSelectedStockTrendV4(stockLastAdminStockV4),
+  updateIntervalSeconds: qs("stockSetUpdateIntervalSeconds").value,
+  marketShares: qs("stockSetMarketShares").value,
+  teacherShares: qs("stockSetTeacherShares").value,
+  exchangeFund: qs("stockSetExchangeFund").value,
+  perStudentLimit: qs("stockSetPerStudentLimit").value,
+  priceWeight: qs("stockSetPriceWeight").value,
+  trendMoveStep: qs("stockSetTrendMoveStep").value,
+  tradeImpactShares: qs("stockSetTradeImpactShares").value,
+  tradeImpactMaxMove: qs("stockSetTradeImpactMaxMove").value,
+  dailyLimitRate: qs("stockSetDailyLimitRate").value,
+  minPrice: qs("stockSetMinPrice").value,
+  maxPrice: qs("stockSetMaxPrice").value,
+  baseSpread: qs("stockSetBaseSpread").value,
+  volatileSpread: qs("stockSetVolatileSpread").value,
+  buyFeeRate: qs("stockSetBuyFeeRate").value,
+  sellFeeRate: qs("stockSetSellFeeRate").value,
+  feeMode: qs("stockSetFeeMode").value,
+  linkedFundingCampaignId: qs("stockSetLinkedFundingCampaignId").value,
+  resetDayCounters: qs("stockSetResetDay").checked,
+  forceCloseMarket: qs("stockSetForceClose").checked
+}, loadAdminStock);
+
+function renderStudentStockV4(stock) {
+  const s = stock.settings || {};
+  const h = stock.holding || { shares: 0 };
+  const m = stock.marketStats || {};
+  const prices = getStockPrices(stock);
+  const linkedFunding = stock.linkedFunding;
+  const linkedProgress = stockFundingProgress(linkedFunding);
+
+  qs("studentStockBox").innerHTML = `
+    <div class="stockHeroV4">
+      <div><p class="small">오늘의 장세</p><h2>${escapeHtml(stockTrendLabelV4(stock, s.marketTrend || "MIXED"))}</h2></div>
+      <div><p class="small">현재가</p><strong>${formatMoney(prices.currentPrice)}</strong></div>
+      <div><p class="small">내 보유</p><strong>${h.shares || 0}주</strong></div>
+      <div><p class="small">장 상태</p><strong>${stockMarketLabel(s.marketOpen)}</strong></div>
+    </div>
+    <div class="stockPanelV4">
+      <h3>실시간 가격 그래프</h3>
+      <canvas id="studentStockChartV4" class="stockChart stockChartV4" width="720" height="260"></canvas>
+      <div class="grid3 stockMetricGridV4">
+        <div class="mini"><h3>매수가</h3><strong>${formatMoney(prices.buyPrice)}</strong><p class="small">수수료 ${stockRateText(prices.buyFeeRate)}</p></div>
+        <div class="mini"><h3>매도가</h3><strong>${formatMoney(prices.sellPrice)}</strong><p class="small">수수료 ${stockRateText(prices.sellFeeRate)}</p></div>
+        <div class="mini"><h3>마감 예상</h3><strong>${formatMoney(m.expectedClosePrice ?? prices.currentPrice)}</strong></div>
+      </div>
+    </div>
+    <div class="stockPanelV4">
+      <h3>자동 뉴스</h3>
+      ${renderAutoNewsV4(stock.news)}
+    </div>
+    <div class="stockPanelV4">
+      <h3>수수료 연동 펀딩</h3>
+      ${linkedFunding ? `<p><b>${escapeHtml(linkedFunding.title)}</b> ${formatMoney(linkedFunding.currentAmount)} / ${formatMoney(linkedFunding.targetAmount)}</p><div class="progress"><div style="width:${linkedProgress}%"></div></div>` : '<p class="small">관리자가 펀딩을 연결하면 거래 수수료가 자동으로 반영됩니다.</p>'}
+    </div>
+    <div class="grid2">
+      <div class="tradeBoxV4">
+        <label>매수할 주식 수</label>
+        <input id="buyShares" type="number" min="1" oninput="updateStockTradeEstimate()">
+        <p class="small" id="buyStockEstimate">예상 결제금액: -</p>
+        <button class="green stockActionButton" onclick="buyStock()">매수</button>
+      </div>
+      <div class="tradeBoxV4">
+        <label>매도할 주식 수</label>
+        <input id="sellShares" type="number" min="1" oninput="updateStockTradeEstimate()">
+        <p class="small" id="sellStockEstimate">예상 수령금액: -</p>
+        <button class="purple stockActionButton" onclick="sellStock()">매도</button>
+      </div>
+    </div>`;
+  requestAnimationFrame(() => {
+    renderStockChartV4("studentStockChartV4", s.priceHistory, prices.currentPrice);
+    updateStockTradeEstimate();
+  });
+}
+
+renderAdminStock = renderAdminStockV4;
+renderStudentStock = renderStudentStockV4;
 function renderLogTable(config) {
   qs("logsHead").innerHTML = `<tr>${config.headers.map(h => `<th>${escapeHtml(h)}</th>`).join("")}</tr>`;
   qs("logsBody").innerHTML = config.rows.length ? config.rows.map(row => `<tr>${row.map(v => `<td>${escapeHtml(v)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${config.headers.length}">기록이 없어요.</td></tr>`;
@@ -1031,3 +1430,31 @@ window.showLogTab = function(tab) {
   };
   renderLogTable(configs[tab]);
 };
+
+window.updateStockSettings = async () => actionStatus("adminStockStatus", "updateStockSettings", {
+  currentPrice: stockSettingValueV4("stockSetCurrentPrice"),
+  marketTrend: currentSelectedStockTrendV4(stockLastAdminStockV4),
+  updateIntervalSeconds: stockSettingValueV4("stockSetUpdateIntervalSeconds"),
+  marketShares: stockSettingValueV4("stockSetMarketShares"),
+  teacherShares: stockSettingValueV4("stockSetTeacherShares"),
+  exchangeFund: stockSettingValueV4("stockSetExchangeFund"),
+  perStudentLimit: stockSettingValueV4("stockSetPerStudentLimit"),
+  priceWeight: stockSettingValueV4("stockSetPriceWeight"),
+  trendMoveStep: stockSettingValueV4("stockSetTrendMoveStep"),
+  tradeImpactShares: stockSettingValueV4("stockSetTradeImpactShares"),
+  tradeImpactMaxMove: stockSettingValueV4("stockSetTradeImpactMaxMove"),
+  dailyLimitRate: stockSettingValueV4("stockSetDailyLimitRate"),
+  minPrice: stockSettingValueV4("stockSetMinPrice"),
+  maxPrice: stockSettingValueV4("stockSetMaxPrice"),
+  baseSpread: stockSettingValueV4("stockSetBaseSpread"),
+  volatileSpread: stockSettingValueV4("stockSetVolatileSpread"),
+  buyFeeRate: stockSettingValueV4("stockSetBuyFeeRate"),
+  sellFeeRate: stockSettingValueV4("stockSetSellFeeRate"),
+  feeMode: stockSettingValueV4("stockSetFeeMode"),
+  linkedFundingCampaignId: stockSettingValueV4("stockSetLinkedFundingCampaignId"),
+  resetDayCounters: stockSettingCheckedV4("stockSetResetDay"),
+  forceCloseMarket: stockSettingCheckedV4("stockSetForceClose")
+}, loadAdminStock);
+
+renderAdminStock = renderAdminStockV4;
+renderStudentStock = renderStudentStockV4;
