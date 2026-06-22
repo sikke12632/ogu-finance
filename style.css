@@ -13,3 +13,9 @@ button{cursor:pointer;background:var(--main);color:white;border:none;margin-righ
 .tableWrap{overflow-x:auto;margin-top:12px}table{width:100%;border-collapse:collapse;font-size:14px}th,td{border-bottom:1px solid var(--line);padding:9px;text-align:left;vertical-align:middle}th{background:#f9fafb;font-weight:bold}
 .notice{border-left:5px solid var(--blue);padding:12px;background:#eff6ff;border-radius:10px;margin-bottom:14px;color:#1e3a8a}.dangerNotice{border-left:5px solid var(--red);padding:12px;background:#fee2e2;border-radius:10px;margin-bottom:14px;color:#991b1b}.logo{text-align:center;margin-bottom:20px}.logoTitle{font-size:32px;font-weight:900}.logoSub{color:#6b7280;font-size:14px;margin-top:6px}.progress{background:#e5e7eb;border-radius:999px;height:12px;overflow:hidden}.progress>div{height:100%;background:#2563eb}.panelText{padding:12px;background:#f9fafb;border-radius:12px;margin-top:10px;line-height:1.6}.nowrap{white-space:nowrap}
 @media(max-width:860px){.grid,.grid2,.grid3{grid-template-columns:1fr}.topbar{display:block}.wrap{padding:14px}.centerBox{margin:20px auto}table{font-size:13px}button{width:auto}}
+.stockChartPanel{margin-top:14px}
+.stockChart{width:100%;max-width:100%;min-height:220px;border:1px solid var(--line);border-radius:14px;background:#fff;display:block}
+.stockNewsBox{border:2px solid #f6ad55;border-radius:14px;padding:14px;background:#fffaf0;margin-bottom:14px}
+.stockNewsBox h2{margin:0 0 8px 0}
+.stockNewsItem{background:#fff;border-left:5px solid #ed8936;margin-top:10px}
+.stockActionButton{min-width:96px}
