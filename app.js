@@ -771,7 +771,7 @@ function renderStockChart(canvasId, history, fallbackPrice = 100) {
   ctx.fillText(`최근 ${values.length}회`, width - 96, height - 10);
 }
 
-function renderAdminStock(stock) {
+function renderAdminStockV3(stock) {
   const s = stock.settings || {};
   const m = stock.marketStats || {};
   const prices = getStockPrices(stock);
@@ -900,7 +900,7 @@ window.updateStockSettings = async () => actionStatus("adminStockStatus", "updat
   forceCloseMarket: qs("stockSetForceClose").checked
 }, loadAdminStock);
 
-function renderStudentStock(stock) {
+function renderStudentStockV3(stock) {
   const s = stock.settings || {};
   const h = stock.holding || { shares: 0 };
   const m = stock.marketStats || {};
@@ -966,7 +966,8 @@ function renderStudentStock(stock) {
   });
 }
 
-renderStudentStock = renderStudentStockV2;
+renderAdminStock = renderAdminStockV3;
+renderStudentStock = renderStudentStockV3;
 
 window.updateStockTradeEstimate = function() {
   const stock = latestStudentSummary?.stock;
