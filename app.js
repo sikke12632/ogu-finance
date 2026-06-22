@@ -23,6 +23,8 @@ let latestAdminAccounts = null;
 let latestStudentSummary = null;
 let latestLogs = null;
 let currentLogTab = "logs";
+let renderAdminStock = null;
+let renderStudentStock = null;
 
 function toEmail(userId) {
   return `${String(userId || "").trim().toLowerCase()}@ogu.local`;
