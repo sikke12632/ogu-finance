@@ -336,7 +336,7 @@ window.loadAdminStock = async function() {
     renderAdminStock(res.stock);
   } catch (err) { showStatus("adminStockStatus", errMsg(err), "error"); }
 };
-function renderAdminStock(stock) {
+function renderAdminStockV2(stock) {
   const s = stock.settings || {};
   const m = stock.marketStats || {};
   const recentTrades = stock.recentTrades || [];
@@ -415,6 +415,8 @@ window.openStockMarket = async () => actionStatus("adminStockStatus", "openStock
 window.closeStockMarket = async () => actionStatus("adminStockStatus", "closeStockMarket", {}, loadAdminStock);
 window.teacherBuyStock = async () => actionStatus("adminStockStatus", "teacherBuyStock", { shares: qs("teacherBuyShares").value }, loadAdminStock);
 window.teacherSellStock = async () => actionStatus("adminStockStatus", "teacherSellStock", { shares: qs("teacherSellShares").value }, loadAdminStock);
+renderAdminStock = renderAdminStockV2;
+
 window.updateStockSettings = async () => actionStatus("adminStockStatus", "updateStockSettings", {
   currentPrice: qs("stockSetCurrentPrice").value,
   marketShares: qs("stockSetMarketShares").value,
@@ -518,7 +520,7 @@ window.showStudentTab = function(tab) {
   qs(`${tab}Tab`).classList.remove("hidden");
   qs(`tab${cap(tab)}Btn`).classList.add("active");
 };
-function renderStudentStock(stock) {
+function renderStudentStockV2(stock) {
   const s = stock.settings || {};
   const h = stock.holding || { shares: 0 };
   const m = stock.marketStats || {};
@@ -666,3 +668,363 @@ function csvEscape(v) {
   return /[",\n]/.test(s) ? `"${s.replaceAll('"','""')}"` : s;
 }
 
+// Stock update v2: display-only helpers and safer student trade button handling.
+var stockActionLockedV2 = false;
+
+function stockNum(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function stockRateInput(value) {
+  return Math.round(stockNum(value, 0) * 1000) / 10;
+}
+
+function stockRateText(value) {
+  return `${stockRateInput(value)}%`;
+}
+
+function getStockPrices(stock) {
+  const s = stock?.settings || {};
+  const p = stock?.prices || {};
+  const currentPrice = stockNum(p.currentPrice ?? s.currentPrice, 100);
+  const spread = stockNum(p.spread ?? s.baseSpread, 1);
+  return {
+    currentPrice,
+    buyPrice: stockNum(p.buyPrice, currentPrice + spread),
+    sellPrice: stockNum(p.sellPrice, Math.max(1, currentPrice - spread)),
+    spread,
+    buyFeeRate: stockNum(p.buyFeeRate ?? s.buyFeeRate, 0.05),
+    sellFeeRate: stockNum(p.sellFeeRate ?? s.sellFeeRate, 0.05),
+    feeMode: p.feeMode || s.feeMode || "split"
+  };
+}
+
+function stockFeePreview(amount, rate) {
+  if (amount <= 0 || rate <= 0) return 0;
+  return Math.max(1, Math.ceil(amount * rate));
+}
+
+function stockMarketLabel(status) {
+  return status === "OPEN" ? "열림" : "마감";
+}
+
+function stockFeeModeLabel(mode) {
+  const map = { burn: "소멸", treasury: "학급 금고", funding: "펀딩", split: "70% 소멸 + 30% 펀딩" };
+  return map[mode] || mode || "-";
+}
+
+function stockFundingProgress(campaign) {
+  if (!campaign) return 0;
+  return Math.min(100, Math.floor(stockNum(campaign.currentAmount, 0) / Math.max(1, stockNum(campaign.targetAmount, 1)) * 100));
+}
+
+function renderStockChart(canvasId, history, fallbackPrice = 100) {
+  const canvas = qs(canvasId);
+  if (!canvas) return;
+  const values = (Array.isArray(history) ? history : [])
+    .map(v => Math.max(1, Math.round(stockNum(v, fallbackPrice))))
+    .filter(v => Number.isFinite(v));
+  if (!values.length) values.push(Math.max(1, Math.round(stockNum(fallbackPrice, 100))));
+
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  const pad = 34;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(1, max - min);
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = "#e5e7eb";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 5; i += 1) {
+    const y = pad + ((height - pad * 2) / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(pad, y);
+    ctx.lineTo(width - pad, y);
+    ctx.stroke();
+  }
+
+  const last = values.at(-1);
+  const first = values[0];
+  ctx.strokeStyle = last >= first ? "#2563eb" : "#b91c1c";
+  ctx.lineWidth = 4;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  values.forEach((value, index) => {
+    const x = values.length === 1 ? width / 2 : pad + ((width - pad * 2) * index) / (values.length - 1);
+    const y = height - pad - ((value - min) / range) * (height - pad * 2);
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  ctx.fillStyle = "#111827";
+  ctx.font = "14px Arial";
+  ctx.fillText(`${max.toLocaleString("ko-KR")}오구`, pad, 22);
+  ctx.fillText(`${min.toLocaleString("ko-KR")}오구`, pad, height - 10);
+  ctx.fillStyle = "#6b7280";
+  ctx.fillText(`최근 ${values.length}회`, width - 96, height - 10);
+}
+
+function renderAdminStock(stock) {
+  const s = stock.settings || {};
+  const m = stock.marketStats || {};
+  const prices = getStockPrices(stock);
+  const recentTrades = stock.recentTrades || [];
+  const campaigns = stock.fundingCampaigns || [];
+  const linkedId = s.linkedFundingCampaignId || "";
+  const linkedFunding = stock.linkedFunding || campaigns.find(c => c.campaignId === linkedId || c.id === linkedId);
+  const linkedText = linkedId ? (linkedFunding?.title || "선택한 펀딩") : "연결 안 함";
+  const net = stockNum(m.netBuy, 0);
+  const netText = net > 0 ? `+${net}주` : `${net}주`;
+  const closeReason = s.lastCloseAdminReason || s.lastCloseReason || "아직 마감 설명이 없어요.";
+  const adminNews = stock.news || [];
+  const fundingOptions = [
+    `<option value="">펀딩 연결 안 함</option>`,
+    ...campaigns.map(c => `<option value="${escapeHtml(c.campaignId || c.id)}" ${linkedId === (c.campaignId || c.id) ? "selected" : ""}>${escapeHtml(c.title)} (${formatMoney(c.currentAmount)} / ${formatMoney(c.targetAmount)})</option>`)
+  ].join("");
+  const adminNewsHtml = adminNews.length
+    ? `<div class="tableWrap"><table><thead><tr><th>구분</th><th>제목</th><th>내용</th><th>등록시각</th><th>관리</th></tr></thead><tbody>${adminNews.map(n => `<tr><td>${n.type === "CLOSE_MARKET" ? "장마감" : "일반"}</td><td>${escapeHtml(n.title)}</td><td>${escapeHtml(n.body || "")}</td><td>${escapeHtml(n.createdAt || "")}</td><td><button class="danger smallBtn" onclick="deleteStockNews('${escapeJs(n.newsId || n.id)}')">삭제</button></td></tr>`).join("")}</tbody></table></div>`
+    : '<p class="small">등록된 뉴스가 없어요.</p>';
+  const tradesHtml = recentTrades.length
+    ? `<div class="tableWrap"><table><thead><tr><th>시간</th><th>이름</th><th>종류</th><th>수량</th><th>가격</th><th>거래금액</th><th>수수료</th><th>보유 변화</th></tr></thead><tbody>${recentTrades.map(t => `<tr><td>${escapeHtml(t.timestamp)}</td><td>${escapeHtml(t.name || t.userId || "-")}</td><td>${escapeHtml(t.tradeType)}</td><td>${t.shares || 0}주</td><td>${formatMoney(t.price || 0)}</td><td>${formatMoney(t.total || 0)}</td><td>${formatMoney(t.fee || 0)}</td><td>${t.beforeShares ?? "-"} → ${t.afterShares ?? "-"}</td></tr>`).join("")}</tbody></table></div>`
+    : '<p class="small">최근 거래가 없어요.</p>';
+
+  qs("adminStockBox").innerHTML = `
+    <div class="grid3">
+      <div class="mini"><h3>현재가</h3><strong>${formatMoney(prices.currentPrice)}</strong></div>
+      <div class="mini"><h3>학생 매수가</h3><strong>${formatMoney(prices.buyPrice)}</strong><p class="small">수수료 ${stockRateText(prices.buyFeeRate)}</p></div>
+      <div class="mini"><h3>학생 매도가</h3><strong>${formatMoney(prices.sellPrice)}</strong><p class="small">수수료 ${stockRateText(prices.sellFeeRate)}</p></div>
+      <div class="mini"><h3>장 상태</h3><strong>${stockMarketLabel(s.marketOpen)}</strong></div>
+      <div class="mini"><h3>시장 보유 주식</h3><strong>${s.marketShares || 0}주</strong></div>
+      <div class="mini"><h3>교사 보유</h3><strong>${s.teacherShares || 0}주</strong></div>
+      <div class="mini"><h3>거래소 보유금</h3><strong>${formatMoney(s.exchangeFund)}</strong></div>
+      <div class="mini"><h3>전체 순매수</h3><strong>${netText}</strong></div>
+      <div class="mini"><h3>연동 펀딩</h3><strong>${escapeHtml(linkedText)}</strong></div>
+    </div>
+    <div class="mini stockChartPanel">
+      <h3>주가 그래프</h3>
+      <canvas id="adminStockChart" class="stockChart" width="720" height="260"></canvas>
+    </div>
+    <div class="mini">
+      <h3>실시간 거래판</h3>
+      <div class="grid3">
+        <div class="mini"><h3>학생 매수/매도</h3><strong>${m.studentBuy || 0} / ${m.studentSell || 0}주</strong></div>
+        <div class="mini"><h3>교사 매수/매도</h3><strong>${m.teacherBuy || 0} / ${m.teacherSell || 0}주</strong></div>
+        <div class="mini"><h3>예상 마감가</h3><strong>${formatMoney(m.expectedClosePrice ?? prices.currentPrice)}</strong><p class="small">${escapeHtml(m.direction || "보합 가능")}</p></div>
+      </div>
+    </div>
+    <div class="mini">
+      <h3>수수료 현황</h3>
+      <div class="grid3">
+        <div class="mini"><h3>총 수수료</h3><strong>${formatMoney(s.stockFeeTotal || 0)}</strong></div>
+        <div class="mini"><h3>소멸</h3><strong>${formatMoney(s.stockFeeBurned || 0)}</strong></div>
+        <div class="mini"><h3>학급 금고</h3><strong>${formatMoney(s.stockFeeTreasury || 0)}</strong></div>
+        <div class="mini"><h3>펀딩 적립</h3><strong>${formatMoney(s.stockFeeFunding || 0)}</strong></div>
+        <div class="mini"><h3>처리 방식</h3><strong>${stockFeeModeLabel(s.feeMode)}</strong></div>
+      </div>
+    </div>
+    <div class="mini"><h3>최근 장마감 설명</h3><p>${escapeHtml(closeReason)}</p></div>
+    <button class="green" onclick="openStockMarket()">장 열기</button>
+    <button class="danger" onclick="closeStockMarket()">장 마감</button>
+    <button class="secondary" onclick="loadAdminStock()">거래판 새로고침</button>
+    <div class="grid2">
+      <div><label>교사 직접 매수</label><input id="teacherBuyShares" type="number" min="1"><button onclick="teacherBuyStock()">매수</button></div>
+      <div><label>교사 직접 매도</label><input id="teacherSellShares" type="number" min="1"><button onclick="teacherSellStock()">매도</button></div>
+    </div>
+    <div class="mini">
+      <h3>최근 거래 내역</h3>
+      ${tradesHtml}
+    </div>
+    <div class="mini">
+      <h3>뉴스 등록/삭제</h3>
+      <div class="grid2">
+        <div><label>뉴스 제목</label><input id="stockNewsTitle" placeholder="예: 오구 주식회사, 새로운 인기"></div>
+        <div><label>뉴스 내용</label><input id="stockNewsBody" placeholder="학생들이 볼 짧은 시장 소식을 적어 주세요."></div>
+      </div>
+      <button class="green" onclick="addStockNews()">뉴스 등록</button>
+      <h3 style="margin-top:14px;">현재 뉴스 목록</h3>
+      ${adminNewsHtml}
+    </div>
+    <div class="mini">
+      <h3>관리자 주식 설정</h3>
+      <div class="grid3">
+        <div><label>현재 주가</label><input id="stockSetCurrentPrice" type="number" min="1" value="${s.currentPrice ?? 100}"></div>
+        <div><label>시장 보유 주식</label><input id="stockSetMarketShares" type="number" min="0" value="${s.marketShares ?? 0}"></div>
+        <div><label>교사 보유 주식</label><input id="stockSetTeacherShares" type="number" min="0" value="${s.teacherShares ?? 0}"></div>
+        <div><label>거래소 보유금</label><input id="stockSetExchangeFund" type="number" min="0" value="${s.exchangeFund ?? 0}"></div>
+        <div><label>1인 보유 한도</label><input id="stockSetPerStudentLimit" type="number" min="0" value="${s.perStudentLimit ?? 20}"></div>
+        <div><label>순매수 1주당 반영값</label><input id="stockSetPriceWeight" type="number" min="0" step="0.1" value="${s.priceWeight ?? 1}"></div>
+        <div><label>일일 등락 한도(%)</label><input id="stockSetDailyLimitRate" type="number" min="0" max="100" step="0.1" value="${stockRateInput(s.dailyLimitRate ?? 0.1)}"></div>
+        <div><label>최저 주가</label><input id="stockSetMinPrice" type="number" min="1" value="${s.minPrice ?? 1}"></div>
+        <div><label>최고 주가</label><input id="stockSetMaxPrice" type="number" min="1" value="${s.maxPrice ?? 200}"></div>
+        <div><label>매수/매도 가격 차이</label><input id="stockSetBaseSpread" type="number" min="0" value="${s.baseSpread ?? 1}"></div>
+        <div><label>매수 수수료(%)</label><input id="stockSetBuyFeeRate" type="number" min="0" max="100" step="0.1" value="${stockRateInput(s.buyFeeRate ?? 0.05)}"></div>
+        <div><label>매도 수수료(%)</label><input id="stockSetSellFeeRate" type="number" min="0" max="100" step="0.1" value="${stockRateInput(s.sellFeeRate ?? 0.05)}"></div>
+        <div><label>수수료 처리</label><select id="stockSetFeeMode">
+          <option value="split" ${s.feeMode === "split" ? "selected" : ""}>70% 소멸 + 30% 펀딩</option>
+          <option value="funding" ${s.feeMode === "funding" ? "selected" : ""}>전액 펀딩</option>
+          <option value="burn" ${s.feeMode === "burn" ? "selected" : ""}>전액 소멸</option>
+          <option value="treasury" ${s.feeMode === "treasury" ? "selected" : ""}>학급 금고</option>
+        </select></div>
+        <div><label>연동할 펀딩</label><select id="stockSetLinkedFundingCampaignId">${fundingOptions}</select></div>
+      </div>
+      <label><input id="stockSetResetDay" type="checkbox" checked> 오늘 거래량 초기화</label>
+      <label><input id="stockSetForceClose" type="checkbox"> 장 상태를 마감으로 변경</label>
+      <button class="purple" onclick="updateStockSettings()">주식 설정 저장</button>
+    </div>`;
+  requestAnimationFrame(() => renderStockChart("adminStockChart", s.priceHistory, prices.currentPrice));
+}
+
+window.updateStockSettings = async () => actionStatus("adminStockStatus", "updateStockSettings", {
+  currentPrice: qs("stockSetCurrentPrice").value,
+  marketShares: qs("stockSetMarketShares").value,
+  teacherShares: qs("stockSetTeacherShares").value,
+  exchangeFund: qs("stockSetExchangeFund").value,
+  perStudentLimit: qs("stockSetPerStudentLimit").value,
+  priceWeight: qs("stockSetPriceWeight").value,
+  dailyLimitRate: qs("stockSetDailyLimitRate").value,
+  minPrice: qs("stockSetMinPrice").value,
+  maxPrice: qs("stockSetMaxPrice").value,
+  baseSpread: qs("stockSetBaseSpread").value,
+  buyFeeRate: qs("stockSetBuyFeeRate").value,
+  sellFeeRate: qs("stockSetSellFeeRate").value,
+  feeMode: qs("stockSetFeeMode").value,
+  linkedFundingCampaignId: qs("stockSetLinkedFundingCampaignId").value,
+  resetDayCounters: qs("stockSetResetDay").checked,
+  forceCloseMarket: qs("stockSetForceClose").checked
+}, loadAdminStock);
+
+function renderStudentStock(stock) {
+  const s = stock.settings || {};
+  const h = stock.holding || { shares: 0 };
+  const m = stock.marketStats || {};
+  const prices = getStockPrices(stock);
+  const net = stockNum(m.netBuy, 0);
+  const netText = net > 0 ? `+${net}주` : `${net}주`;
+  const lastReason = s.lastCloseReason || "아직 장마감 설명이 없어요.";
+  const linkedFunding = stock.linkedFunding;
+  const linkedTitle = linkedFunding?.title || (s.linkedFundingCampaignId ? "관리자가 선택한 펀딩" : "연동된 펀딩 없음");
+  const linkedProgress = stockFundingProgress(linkedFunding);
+  const newsList = stock.news || [];
+  const news = newsList.length
+    ? `<div class="stockNewsBox"><h2>오늘의 오구 뉴스</h2>${newsList.map((n, idx) => `<div class="mini stockNewsItem"><b>${idx === 0 ? '<span class="badge red">NEW</span>' : ''}${escapeHtml(n.title)}</b><p>${escapeHtml(n.body || "")}</p><p class="small">${escapeHtml(n.createdAt || "")}</p></div>`).join("")}</div>`
+    : '<div class="stockNewsBox"><h2>오늘의 오구 뉴스</h2><p class="small">등록된 뉴스가 없어요.</p></div>';
+
+  qs("studentStockBox").innerHTML = `
+    ${news}
+    <div class="grid3">
+      <div class="mini"><h3>현재가</h3><strong>${formatMoney(prices.currentPrice)}</strong></div>
+      <div class="mini"><h3>매수가</h3><strong>${formatMoney(prices.buyPrice)}</strong><p class="small">수수료 ${stockRateText(prices.buyFeeRate)}</p></div>
+      <div class="mini"><h3>매도가</h3><strong>${formatMoney(prices.sellPrice)}</strong><p class="small">수수료 ${stockRateText(prices.sellFeeRate)}</p></div>
+      <div class="mini"><h3>장 상태</h3><strong>${stockMarketLabel(s.marketOpen)}</strong></div>
+      <div class="mini"><h3>내 보유 주식</h3><strong>${h.shares || 0}주</strong></div>
+      <div class="mini"><h3>보유 한도</h3><strong>${s.perStudentLimit ?? 20}주</strong></div>
+    </div>
+    <div class="mini stockChartPanel">
+      <h3>실시간 주가 그래프</h3>
+      <canvas id="studentStockChart" class="stockChart" width="720" height="260"></canvas>
+    </div>
+    <div class="mini">
+      <h3>오늘의 시장 분위기</h3>
+      <div class="grid3">
+        <div class="mini"><h3>전체 매수</h3><strong>${m.totalBuy || 0}주</strong></div>
+        <div class="mini"><h3>전체 매도</h3><strong>${m.totalSell || 0}주</strong></div>
+        <div class="mini"><h3>현재 순매수</h3><strong>${netText}</strong></div>
+      </div>
+      <p><b>마감 예상:</b> ${escapeHtml(m.direction || "보합 가능")} · 예상가 ${formatMoney(m.expectedClosePrice ?? prices.currentPrice)}</p>
+    </div>
+    <div class="mini">
+      <h3>주식 수수료 펀딩 연결</h3>
+      <p><b>${escapeHtml(linkedTitle)}</b></p>
+      ${linkedFunding ? `<p>${formatMoney(linkedFunding.currentAmount)} / ${formatMoney(linkedFunding.targetAmount)}</p><div class="progress"><div style="width:${linkedProgress}%"></div></div>` : '<p class="small">관리자가 펀딩을 연결하면 거래 수수료가 자동으로 반영됩니다.</p>'}
+      <p class="small">학생은 따로 펀딩 버튼을 누르지 않아도 매매 수수료가 자동 처리됩니다.</p>
+    </div>
+    <div class="mini"><h3>최근 주가 변화 이유</h3><p>${escapeHtml(lastReason)}</p></div>
+    <div class="grid2">
+      <div>
+        <label>매수할 주식 수</label>
+        <input id="buyShares" type="number" min="1" oninput="updateStockTradeEstimate()">
+        <p class="small" id="buyStockEstimate">예상 결제금액: -</p>
+        <button class="green stockActionButton" onclick="buyStock()">매수</button>
+      </div>
+      <div>
+        <label>매도할 주식 수</label>
+        <input id="sellShares" type="number" min="1" oninput="updateStockTradeEstimate()">
+        <p class="small" id="sellStockEstimate">예상 수령금액: -</p>
+        <button class="purple stockActionButton" onclick="sellStock()">매도</button>
+      </div>
+    </div>`;
+  requestAnimationFrame(() => {
+    renderStockChart("studentStockChart", s.priceHistory, prices.currentPrice);
+    updateStockTradeEstimate();
+  });
+}
+
+renderStudentStock = renderStudentStockV2;
+
+window.updateStockTradeEstimate = function() {
+  const stock = latestStudentSummary?.stock;
+  if (!stock) return;
+  const prices = getStockPrices(stock);
+  const buyQty = Math.max(0, Math.floor(stockNum(qs("buyShares")?.value, 0)));
+  const sellQty = Math.max(0, Math.floor(stockNum(qs("sellShares")?.value, 0)));
+  const buyAmount = prices.buyPrice * buyQty;
+  const sellAmount = prices.sellPrice * sellQty;
+  const buyFee = stockFeePreview(buyAmount, prices.buyFeeRate);
+  const sellFee = stockFeePreview(sellAmount, prices.sellFeeRate);
+  if (qs("buyStockEstimate")) {
+    qs("buyStockEstimate").textContent = buyQty ? `예상 결제금액: ${formatMoney(buyAmount + buyFee)} (수수료 ${formatMoney(buyFee)})` : "예상 결제금액: -";
+  }
+  if (qs("sellStockEstimate")) {
+    qs("sellStockEstimate").textContent = sellQty ? `예상 수령금액: ${formatMoney(Math.max(0, sellAmount - sellFee))} (수수료 ${formatMoney(sellFee)})` : "예상 수령금액: -";
+  }
+};
+
+function setStockActionDisabled(disabled) {
+  document.querySelectorAll(".stockActionButton").forEach(btn => { btn.disabled = disabled; });
+}
+
+async function runStockAction(fnName, data) {
+  if (stockActionLockedV2) return;
+  stockActionLockedV2 = true;
+  setStockActionDisabled(true);
+  try {
+    await actionStatus("studentStockStatus", fnName, data, loadStudentSummary);
+  } finally {
+    stockActionLockedV2 = false;
+    setStockActionDisabled(false);
+  }
+}
+
+window.buyStock = async () => runStockAction("buyStock", { shares: qs("buyShares").value });
+window.sellStock = async () => runStockAction("sellStock", { shares: qs("sellShares").value });
+
+function renderStudentFundingHistoryV2(list) {
+  const box = qs("studentFundingHistoryBox");
+  if (!list.length) { box.innerHTML = '<p class="small">참여 기록이 없어요.</p>'; return; }
+  box.innerHTML = `<div class="tableWrap"><table><thead><tr><th>시간</th><th>펀딩</th><th>금액</th><th>출처</th><th>환불</th></tr></thead><tbody>${list.map(c => `<tr><td>${escapeHtml(c.timestamp)}</td><td>${escapeHtml(c.title)}</td><td>${formatMoney(c.amount)}</td><td>${escapeHtml(c.sourceLabel || (c.source === "STOCK_FEE" ? "주식 수수료" : "직접 참여"))}</td><td>${c.refunded === "YES" ? "환불됨" : "-"}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+renderStudentFundingHistory = renderStudentFundingHistoryV2;
+
+window.showLogTab = function(tab) {
+  currentLogTab = tab;
+  ["logs","wallet","money","stock","deposit","funding"].forEach(t => qs(`logTab${cap(t)}Btn`)?.classList.remove("active"));
+  qs(`logTab${cap(tab)}Btn`)?.classList.add("active");
+  if (!latestLogs) return;
+  const configs = {
+    logs: { headers:["시간","구분","사용자","권한","행동","결과","상세"], rows:(latestLogs.logs||[]).map(x=>[x.timestamp,x.category,x.userId,x.role,x.action,x.result,x.detail]) },
+    wallet: { headers:["시간","학생","종류","금액","잔액 변화","대기금 변화","처리자","내용"], rows:(latestLogs.walletTransactions||[]).map(x=>[x.timestamp,x.userId,txTypeKo(x.txType),formatMoney(x.amount),`${formatMoney(x.beforeBalance)} → ${formatMoney(x.afterBalance)}`,`${formatMoney(x.beforePendingWithdrawal)} → ${formatMoney(x.afterPendingWithdrawal)}`,x.processedBy,x.note]) },
+    money: { headers:["신청시간","처리시간","학생","종류","금액","상태","처리자"], rows:(latestLogs.moneyRequests||[]).map(x=>[x.requestedAt,x.processedAt,x.studentName,requestTypeKo(x.requestType),formatMoney(x.amount),x.status,x.processedBy]) },
+    stock: { headers:["시간","사용자","종류","주식수","가격","거래금액","수수료","실제 금액","보유 변화"], rows:(latestLogs.stockTrades||[]).map(x=>[x.timestamp,x.name||x.userId,x.tradeType,`${x.shares}주`,formatMoney(x.price),formatMoney(x.total),formatMoney(x.fee || 0),formatMoney(x.netAmount ?? x.total),`${x.beforeShares??""} → ${x.afterShares??""}`]) },
+    deposit: { headers:["시작","만기/처리","학생","상품","원금","상태","지급액","상세"], rows:(latestLogs.studentDeposits||[]).map(x=>[x.startAt,x.claimedAt||x.maturityAt,x.userName,x.productName,formatMoney(x.principal),x.status,formatMoney(x.payoutAmount),x.detail]) },
+    funding: { headers:["시간","학생","펀딩","금액","출처","환불"], rows:(latestLogs.fundingContributions||[]).map(x=>[x.timestamp,x.userName,x.title,formatMoney(x.amount),x.sourceLabel || (x.source === "STOCK_FEE" ? "주식 수수료" : "직접 참여"),x.refunded]) }
+  };
+  renderLogTable(configs[tab]);
+};
