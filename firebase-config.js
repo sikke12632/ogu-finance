@@ -13,3 +13,12 @@ window.firebaseConfig = {
 
 // functions/index.js의 REGION과 같아야 합니다.
 window.functionsRegion = "asia-northeast3";
+
+(function loadFirestoreBackupModule() {
+  const src = "./firestore-backup.js";
+  if (document.querySelector(`script[src="${src}"]`)) return;
+  const script = document.createElement("script");
+  script.type = "module";
+  script.src = src;
+  document.head.appendChild(script);
+})();
