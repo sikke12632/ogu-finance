@@ -662,6 +662,7 @@ window.updateStockSettings = async () => actionStatus("adminStockStatus", "updat
   trendMoveStep: stockSettingValueV4("stockSetTrendMoveStep"),
   tradeImpactShares: stockSettingValueV4("stockSetTradeImpactShares"),
   tradeImpactMaxMove: stockSettingValueV4("stockSetTradeImpactMaxMove"),
+  maxTickMove: stockSettingValueV4("stockSetMaxTickMove"),
   dailyLimitRate: stockSettingValueV4("stockSetDailyLimitRate"),
   minPrice: stockSettingValueV4("stockSetMinPrice"),
   maxPrice: stockSettingValueV4("stockSetMaxPrice"),
@@ -710,6 +711,7 @@ window.updateStockSettings = async () => actionStatus("adminStockStatus", "updat
   trendMoveStep: stockSettingValueV4("stockSetTrendMoveStep"),
   tradeImpactShares: stockSettingValueV4("stockSetTradeImpactShares"),
   tradeImpactMaxMove: stockSettingValueV4("stockSetTradeImpactMaxMove"),
+  maxTickMove: stockSettingValueV4("stockSetMaxTickMove"),
   dailyLimitRate: stockSettingValueV4("stockSetDailyLimitRate"),
   minPrice: stockSettingValueV4("stockSetMinPrice"),
   maxPrice: stockSettingValueV4("stockSetMaxPrice"),
@@ -901,7 +903,7 @@ function renderAdminStockV4(stock) {
       <div class="grid3 stockMetricGridV4">
         <div class="mini"><h3>매수가</h3><strong>${formatMoney(prices.buyPrice)}</strong></div>
         <div class="mini"><h3>매도가</h3><strong>${formatMoney(prices.sellPrice)}</strong></div>
-        <div class="mini"><h3>예상 마감가</h3><strong>${formatMoney(m.expectedClosePrice ?? prices.currentPrice)}</strong></div>
+        <div class="mini"><h3>마감 기준 매도가</h3><strong>${formatMoney(prices.sellPrice)}</strong></div>
       </div>
     </div>
 
@@ -918,9 +920,10 @@ function renderAdminStockV4(stock) {
         <div><label>일일 등락 한도(%)</label><input id="stockSetDailyLimitRate" type="number" min="0" max="100" step="0.1" value="${stockRateInput(s.dailyLimitRate ?? 0.1)}"></div>
         <div><label>기본 스프레드</label><input id="stockSetBaseSpread" type="number" min="0" value="${s.baseSpread ?? 1}"></div>
         <div><label>급등/급락 스프레드</label><input id="stockSetVolatileSpread" type="number" min="0" value="${s.volatileSpread ?? 3}"></div>
-        <div><label>장세 영향값</label><input id="stockSetTrendMoveStep" type="number" min="0" step="0.1" value="${s.trendMoveStep ?? 1}"></div>
+        <div><label>장세 영향값</label><input id="stockSetTrendMoveStep" type="number" min="0" step="0.1" value="${s.trendMoveStep ?? 0.4}"></div>
         <div><label>거래량 반영 기준(주)</label><input id="stockSetTradeImpactShares" type="number" min="1" value="${s.tradeImpactShares ?? 10}"></div>
-        <div><label>거래량 최대 반영값</label><input id="stockSetTradeImpactMaxMove" type="number" min="0" value="${s.tradeImpactMaxMove ?? 8}"></div>
+        <div><label>거래량 최대 반영값</label><input id="stockSetTradeImpactMaxMove" type="number" min="0" value="${s.tradeImpactMaxMove ?? 2}"></div>
+        <div><label>1회 최대 변동폭</label><input id="stockSetMaxTickMove" type="number" min="0" step="0.1" value="${s.maxTickMove ?? 2}"></div>
         <div><label>순매수 1주당 반영값</label><input id="stockSetPriceWeight" type="number" min="0" step="0.1" value="${s.priceWeight ?? 1}"></div>
         <div><label>매수 수수료(%)</label><input id="stockSetBuyFeeRate" type="number" min="0" max="100" step="0.1" value="${stockRateInput(s.buyFeeRate ?? 0.05)}"></div>
         <div><label>매도 수수료(%)</label><input id="stockSetSellFeeRate" type="number" min="0" max="100" step="0.1" value="${stockRateInput(s.sellFeeRate ?? 0.05)}"></div>
@@ -981,6 +984,7 @@ window.updateStockSettings = async () => actionStatus("adminStockStatus", "updat
   trendMoveStep: qs("stockSetTrendMoveStep").value,
   tradeImpactShares: qs("stockSetTradeImpactShares").value,
   tradeImpactMaxMove: qs("stockSetTradeImpactMaxMove").value,
+  maxTickMove: qs("stockSetMaxTickMove").value,
   dailyLimitRate: qs("stockSetDailyLimitRate").value,
   minPrice: qs("stockSetMinPrice").value,
   maxPrice: qs("stockSetMaxPrice").value,
@@ -1015,7 +1019,7 @@ function renderStudentStockV4(stock) {
       <div class="grid3 stockMetricGridV4">
         <div class="mini"><h3>매수가</h3><strong>${formatMoney(prices.buyPrice)}</strong><p class="small">수수료 ${stockRateText(prices.buyFeeRate)}</p></div>
         <div class="mini"><h3>매도가</h3><strong>${formatMoney(prices.sellPrice)}</strong><p class="small">수수료 ${stockRateText(prices.sellFeeRate)}</p></div>
-        <div class="mini"><h3>마감 예상</h3><strong>${formatMoney(m.expectedClosePrice ?? prices.currentPrice)}</strong></div>
+        <div class="mini"><h3>마감 기준 매도가</h3><strong>${formatMoney(prices.sellPrice)}</strong></div>
       </div>
     </div>
     <div class="stockPanelV4">
@@ -1217,7 +1221,7 @@ function renderAdminStockV3(stock) {
       <div class="grid3">
         <div class="mini"><h3>학생 매수/매도</h3><strong>${m.studentBuy || 0} / ${m.studentSell || 0}주</strong></div>
         <div class="mini"><h3>교사 매수/매도</h3><strong>${m.teacherBuy || 0} / ${m.teacherSell || 0}주</strong></div>
-        <div class="mini"><h3>예상 마감가</h3><strong>${formatMoney(m.expectedClosePrice ?? prices.currentPrice)}</strong><p class="small">${escapeHtml(m.direction || "보합 가능")}</p></div>
+        <div class="mini"><h3>마감 기준 매도가</h3><strong>${formatMoney(prices.sellPrice)}</strong><p class="small">장마감 시 이 가격으로 마감됩니다.</p></div>
       </div>
     </div>
     <div class="mini">
@@ -1338,7 +1342,7 @@ function renderStudentStockV3(stock) {
         <div class="mini"><h3>전체 매도</h3><strong>${m.totalSell || 0}주</strong></div>
         <div class="mini"><h3>현재 순매수</h3><strong>${netText}</strong></div>
       </div>
-      <p><b>마감 예상:</b> ${escapeHtml(m.direction || "보합 가능")} · 예상가 ${formatMoney(m.expectedClosePrice ?? prices.currentPrice)}</p>
+      <p><b>마감 기준:</b> 현재 매도가 ${formatMoney(prices.sellPrice)}로 마감됩니다.</p>
     </div>
     <div class="mini">
       <h3>주식 수수료 펀딩 연결</h3>
@@ -1443,6 +1447,7 @@ window.updateStockSettings = async () => actionStatus("adminStockStatus", "updat
   trendMoveStep: stockSettingValueV4("stockSetTrendMoveStep"),
   tradeImpactShares: stockSettingValueV4("stockSetTradeImpactShares"),
   tradeImpactMaxMove: stockSettingValueV4("stockSetTradeImpactMaxMove"),
+  maxTickMove: stockSettingValueV4("stockSetMaxTickMove"),
   dailyLimitRate: stockSettingValueV4("stockSetDailyLimitRate"),
   minPrice: stockSettingValueV4("stockSetMinPrice"),
   maxPrice: stockSettingValueV4("stockSetMaxPrice"),
