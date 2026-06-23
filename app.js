@@ -1458,3 +1458,63 @@ window.updateStockSettings = async () => actionStatus("adminStockStatus", "updat
 
 renderAdminStock = renderAdminStockV4;
 renderStudentStock = renderStudentStockV4;
+
+var stockStudentRefreshTimerFinalV4 = null;
+var stockStudentRefreshBusyFinalV4 = false;
+const renderStudentStockBaseFinalV4 = renderStudentStockV4;
+const showStudentTabBaseFinalV4 = window.showStudentTab;
+
+function stopStudentStockRefreshFinalV4() {
+  clearInterval(stockStudentRefreshTimerFinalV4);
+  stockStudentRefreshTimerFinalV4 = null;
+}
+
+function isStudentStockTabVisibleFinalV4() {
+  const tab = qs("stockTab");
+  return currentRole === "student" && tab && !tab.classList.contains("hidden");
+}
+
+function renderStudentStockLiveFinalV4(stock) {
+  const buyValue = qs("buyShares")?.value ?? "";
+  const sellValue = qs("sellShares")?.value ?? "";
+  renderStudentStockBaseFinalV4(stock);
+  if (buyValue && qs("buyShares")) qs("buyShares").value = buyValue;
+  if (sellValue && qs("sellShares")) qs("sellShares").value = sellValue;
+  updateStockTradeEstimate();
+  startStudentStockRefreshFinalV4(stock);
+}
+
+async function refreshStudentStockOnlyFinalV4() {
+  if (stockStudentRefreshBusyFinalV4 || !isStudentStockTabVisibleFinalV4()) return;
+  const activeId = document.activeElement?.id || "";
+  if (activeId === "buyShares" || activeId === "sellShares") return;
+  stockStudentRefreshBusyFinalV4 = true;
+  try {
+    const res = await call("getStudentStockPanel", {});
+    if (res?.stock) {
+      latestStudentSummary = latestStudentSummary || {};
+      latestStudentSummary.stock = res.stock;
+      renderStudentStockLiveFinalV4(res.stock);
+    }
+  } catch {
+    stopStudentStockRefreshFinalV4();
+  } finally {
+    stockStudentRefreshBusyFinalV4 = false;
+  }
+}
+
+function startStudentStockRefreshFinalV4(stock) {
+  stopStudentStockRefreshFinalV4();
+  if (!stock || !isStudentStockTabVisibleFinalV4() || stock.settings?.marketOpen !== "OPEN") return;
+  const seconds = Math.max(5, Math.floor(stockNum(stock.settings.updateIntervalSeconds, 5)));
+  stockStudentRefreshTimerFinalV4 = setInterval(refreshStudentStockOnlyFinalV4, seconds * 1000);
+}
+
+window.showStudentTab = function(tab) {
+  const result = showStudentTabBaseFinalV4(tab);
+  if (tab === "stock") startStudentStockRefreshFinalV4(latestStudentSummary?.stock);
+  else stopStudentStockRefreshFinalV4();
+  return result;
+};
+
+renderStudentStock = renderStudentStockLiveFinalV4;
