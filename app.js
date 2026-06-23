@@ -891,6 +891,7 @@ function renderAdminStockV4(stock) {
       <div class="segmentedV4">${trendButtons}</div>
       <div class="buttonRowV4">
         <button class="green" onclick="openStockMarket()">장 열기</button>
+        <button class="blue" onclick="updateStockTrend()">장세만 변경</button>
         <button class="danger" onclick="closeStockMarket()">장 마감</button>
         <button class="secondary" onclick="loadAdminStock()">새로고침</button>
         <button class="blue" onclick="tickStockMarket()">가격 1회 갱신</button>
@@ -923,7 +924,7 @@ function renderAdminStockV4(stock) {
         <div><label>장세 영향값</label><input id="stockSetTrendMoveStep" type="number" min="0" step="0.1" value="${s.trendMoveStep ?? 0.4}"></div>
         <div><label>거래량 반영 기준(주)</label><input id="stockSetTradeImpactShares" type="number" min="1" value="${s.tradeImpactShares ?? 10}"></div>
         <div><label>거래량 최대 반영값</label><input id="stockSetTradeImpactMaxMove" type="number" min="0" value="${s.tradeImpactMaxMove ?? 2}"></div>
-        <div><label>1회 최대 변동폭</label><input id="stockSetMaxTickMove" type="number" min="0" step="0.1" value="${s.maxTickMove ?? 2}"></div>
+        <div><label>1회 최대 변동폭</label><input id="stockSetMaxTickMove" type="number" min="0" step="0.1" value="${s.maxTickMove ?? 1}"></div>
         <div><label>순매수 1주당 반영값</label><input id="stockSetPriceWeight" type="number" min="0" step="0.1" value="${s.priceWeight ?? 1}"></div>
         <div><label>매수 수수료(%)</label><input id="stockSetBuyFeeRate" type="number" min="0" max="100" step="0.1" value="${stockRateInput(s.buyFeeRate ?? 0.05)}"></div>
         <div><label>매도 수수료(%)</label><input id="stockSetSellFeeRate" type="number" min="0" max="100" step="0.1" value="${stockRateInput(s.sellFeeRate ?? 0.05)}"></div>
@@ -971,6 +972,9 @@ window.closeStockMarket = async () => {
   await actionStatus("adminStockStatus", "closeStockMarket", {}, loadAdminStock);
 };
 window.tickStockMarket = async () => actionStatus("adminStockStatus", "tickStockMarket", {}, loadAdminStock);
+window.updateStockTrend = async () => actionStatus("adminStockStatus", "updateStockSettings", {
+  marketTrend: currentSelectedStockTrendV4(stockLastAdminStockV4)
+}, loadAdminStock);
 
 window.updateStockSettings = async () => actionStatus("adminStockStatus", "updateStockSettings", {
   currentPrice: qs("stockSetCurrentPrice").value,
