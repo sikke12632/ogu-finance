@@ -40,8 +40,12 @@ button{cursor:pointer;background:var(--main);color:white;border:none;margin-righ
 .tradeBoxV4 button{margin-top:10px}
 .stockAdvancedV4{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
 .stockAdvancedV4 summary{cursor:pointer;font-weight:bold;color:#374151;margin-bottom:8px}
+.stockControlButtonStackV5{display:flex;gap:8px;align-items:flex-end}
+.stockControlButtonStackV5 button{flex:1;margin:28px 0 0}
 @media(max-width:860px){
   .stockHeroV4{grid-template-columns:1fr}
   .segmentedV4{grid-template-columns:1fr 1fr}
   .sectionHeadV4{display:block}
+  .stockControlButtonStackV5{display:block}
+  .stockControlButtonStackV5 button{width:auto;margin-top:8px}
 }

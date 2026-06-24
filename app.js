@@ -1527,3 +1527,200 @@ window.showStudentTab = function(tab) {
 };
 
 renderStudentStock = renderStudentStockLiveFinalV4;
+
+// Stock target engine UI final: clean admin stock panel with hidden teacher target controls.
+function stockTargetStatusFinalV5(s) {
+  if (s?.targetActive === "YES" && stockNum(s.targetPrice, 0) > 0) {
+    return `진행 중: 목표 ${formatMoney(s.targetPrice)} / 종료 ${escapeHtml(s.targetEndAt || "-")}`;
+  }
+  if (s?.targetLastCompletedAt) {
+    return `최근 완료: ${formatMoney(s.targetLastPrice || s.targetPrice || 0)} / ${escapeHtml(s.targetLastCompletedAt)}`;
+  }
+  return "진행 중인 목표가 없음";
+}
+
+function renderAdminStockTargetEngineFinalV5(stock) {
+  stockLastAdminStockV4 = stock;
+  const s = stock.settings || {};
+  const m = stock.marketStats || {};
+  const prices = getStockPrices(stock);
+  const trendKey = s.marketTrend || prices.marketTrend || "MIXED";
+  const trendButtons = stockTrendOptionsV4(stock).map(item => (
+    `<button class="stockTrendButton ${item.key === trendKey ? "active" : ""}" data-trend="${escapeHtml(item.key)}" onclick="selectStockTrend('${escapeJs(item.key)}')">${escapeHtml(item.label)}</button>`
+  )).join("");
+  const linkedFunding = stock.linkedFunding;
+  const linkedText = s.linkedFundingCampaignId ? (linkedFunding?.title || "선택된 펀딩") : "연결 없음";
+  const targetDefault = s.targetActive === "YES" ? s.targetPrice : "";
+  const targetMinutesDefault = s.targetActive === "YES" ? s.targetDurationMinutes : 5;
+
+  qs("adminStockBox").innerHTML = `
+    <div class="stockHeroV4">
+      <div><p class="small">오늘 장세</p><h2>${escapeHtml(stockTrendLabelV4(stock, trendKey))}</h2></div>
+      <div><p class="small">현재가</p><strong>${formatMoney(prices.currentPrice)}</strong></div>
+      <div><p class="small">장 상태</p><strong>${stockMarketLabel(s.marketOpen)}</strong></div>
+      <div><p class="small">자동 갱신</p><strong>${Math.max(1, stockNum(s.updateIntervalSeconds, 5))}초</strong></div>
+    </div>
+
+    <div class="stockPanelV4">
+      <div class="sectionHeadV4">
+        <div>
+          <h3>장 열기와 장세 변경</h3>
+          <p class="small">급등장부터 급락장까지 선택하면 자동 뉴스와 가격 흐름이 함께 바뀝니다.</p>
+        </div>
+        <span class="badge blue">${escapeHtml(linkedText)}</span>
+      </div>
+      <div class="segmentedV4">${trendButtons}</div>
+      <div class="buttonRowV4">
+        <button class="green" onclick="openStockMarket()">장 열기</button>
+        <button class="blue" onclick="updateStockTrend()">장세만 변경</button>
+        <button class="danger" onclick="closeStockMarket()">장 마감</button>
+        <button class="secondary" onclick="loadAdminStock()">새로고침</button>
+        <button class="blue" onclick="tickStockMarket()">가격 1회 갱신</button>
+      </div>
+    </div>
+
+    <div class="stockPanelV4">
+      <div class="sectionHeadV4">
+        <div>
+          <h3>교사용 목표가</h3>
+          <p class="small">학생 화면에는 보이지 않습니다. 장을 연 상태에서만 시작할 수 있습니다.</p>
+        </div>
+        <span class="badge">${stockTargetStatusFinalV5(s)}</span>
+      </div>
+      <div class="grid3">
+        <div><label>목표가</label><input id="stockTargetPrice" type="number" min="1" value="${targetDefault}" placeholder="예: 80"></div>
+        <div><label>도달 시간(분)</label><input id="stockTargetDurationMinutes" type="number" min="1" step="0.5" value="${targetMinutesDefault || 5}"></div>
+        <div class="stockControlButtonStackV5">
+          <button class="purple" onclick="startStockTarget()">목표가 시작</button>
+          <button class="secondary" onclick="clearStockTarget()">목표가 해제</button>
+        </div>
+      </div>
+      <p class="small">오늘 상승/하락 한도 안에서만 움직입니다. 목표가가 한도를 벗어나면 서버가 막습니다.</p>
+    </div>
+
+    <div class="stockPanelV4">
+      <div class="sectionHeadV4">
+        <div>
+          <h3>교사 시장 개입</h3>
+          <p class="small">학생 잔액이나 학생 보유 주식은 건드리지 않고, 교사 거래량만 가격 흐름에 반영합니다.</p>
+        </div>
+        <span class="badge">교사 매수 ${m.teacherBuy || 0}주 / 매도 ${m.teacherSell || 0}주</span>
+      </div>
+      <div class="grid2">
+        <div><label>교사 매수 수량</label><input id="teacherBuyShares" type="number" min="1" placeholder="예: 5"><button class="green" onclick="teacherBuyStock()">교사 매수</button></div>
+        <div><label>교사 매도 수량</label><input id="teacherSellShares" type="number" min="1" placeholder="예: 5"><button class="purple" onclick="teacherSellStock()">교사 매도</button></div>
+      </div>
+    </div>
+
+    <div class="stockPanelV4">
+      <div class="sectionHeadV4"><h3>가격 그래프</h3><span class="badge">${m.direction || "보합권"}</span></div>
+      <canvas id="adminStockChartV4" class="stockChart stockChartV4" width="720" height="260"></canvas>
+      <div class="grid3 stockMetricGridV4">
+        <div class="mini"><h3>매수가</h3><strong>${formatMoney(prices.buyPrice)}</strong></div>
+        <div class="mini"><h3>매도가</h3><strong>${formatMoney(prices.sellPrice)}</strong></div>
+        <div class="mini"><h3>마감 기준 매도가</h3><strong>${formatMoney(prices.sellPrice)}</strong></div>
+      </div>
+    </div>
+
+    <div class="stockPanelV4">
+      <h3>자동 뉴스</h3>
+      ${renderAutoNewsV4(stock.news)}
+    </div>
+
+    <div class="stockPanelV4">
+      <h3>운영 설정</h3>
+      <div class="grid3">
+        <div><label>현재 주가</label><input id="stockSetCurrentPrice" type="number" min="1" value="${s.currentPrice ?? 100}"></div>
+        <div><label>가격 갱신 간격(초)</label><input id="stockSetUpdateIntervalSeconds" type="number" min="1" value="${s.updateIntervalSeconds ?? 5}"></div>
+        <div><label>일일 상승/하락 한도(%)</label><input id="stockSetDailyLimitRate" type="number" min="0" max="100" step="0.1" value="${stockRateInput(s.dailyLimitRate ?? 0.1)}"></div>
+        <div><label>기본 매수/매도 차이</label><input id="stockSetBaseSpread" type="number" min="0" value="${s.baseSpread ?? 1}"></div>
+        <div><label>급등/급락 차이</label><input id="stockSetVolatileSpread" type="number" min="0" value="${s.volatileSpread ?? 3}"></div>
+        <div><label>장세 영향값</label><input id="stockSetTrendMoveStep" type="number" min="0" step="0.1" value="${s.trendMoveStep ?? 0.4}"></div>
+        <div><label>거래량 반영 기준(주)</label><input id="stockSetTradeImpactShares" type="number" min="1" value="${s.tradeImpactShares ?? 10}"></div>
+        <div><label>거래량 최대 반영값</label><input id="stockSetTradeImpactMaxMove" type="number" min="0" value="${s.tradeImpactMaxMove ?? 2}"></div>
+        <div><label>1회 최대 변동폭</label><input id="stockSetMaxTickMove" type="number" min="0" step="0.1" value="${s.maxTickMove ?? 1}"></div>
+        <div><label>순매수 1주당 반영값</label><input id="stockSetPriceWeight" type="number" min="0" step="0.1" value="${s.priceWeight ?? 1}"></div>
+        <div><label>매수 수수료(%)</label><input id="stockSetBuyFeeRate" type="number" min="0" max="100" step="0.1" value="${stockRateInput(s.buyFeeRate ?? 0.05)}"></div>
+        <div><label>매도 수수료(%)</label><input id="stockSetSellFeeRate" type="number" min="0" max="100" step="0.1" value="${stockRateInput(s.sellFeeRate ?? 0.05)}"></div>
+        <div><label>수수료 처리</label><select id="stockSetFeeMode">
+          <option value="split" ${s.feeMode === "split" ? "selected" : ""}>70% 소멸 + 30% 펀딩</option>
+          <option value="funding" ${s.feeMode === "funding" ? "selected" : ""}>전액 펀딩</option>
+          <option value="burn" ${s.feeMode === "burn" ? "selected" : ""}>전액 소멸</option>
+          <option value="treasury" ${s.feeMode === "treasury" ? "selected" : ""}>학급 금고</option>
+        </select></div>
+        <div><label>연동할 펀딩</label><select id="stockSetLinkedFundingCampaignId">${fundingOptionsV4(stock)}</select></div>
+      </div>
+      <details class="stockAdvancedV4">
+        <summary>고급 재고/한도 설정</summary>
+        <div class="grid3">
+          <div><label>시장 보유 주식</label><input id="stockSetMarketShares" type="number" min="0" value="${s.marketShares ?? 0}"></div>
+          <div><label>교사 보유 주식</label><input id="stockSetTeacherShares" type="number" min="0" value="${s.teacherShares ?? 0}"></div>
+          <div><label>거래소 보유금</label><input id="stockSetExchangeFund" type="number" min="0" value="${s.exchangeFund ?? 0}"></div>
+          <div><label>1인 보유 한도</label><input id="stockSetPerStudentLimit" type="number" min="0" value="${s.perStudentLimit ?? 20}"></div>
+          <div><label>최저 주가</label><input id="stockSetMinPrice" type="number" min="1" value="${s.minPrice ?? 1}"></div>
+          <div><label>최고 주가</label><input id="stockSetMaxPrice" type="number" min="1" value="${s.maxPrice ?? 200}"></div>
+        </div>
+      </details>
+      <label><input id="stockSetResetDay" type="checkbox" checked> 오늘 거래량 초기화</label>
+      <label><input id="stockSetForceClose" type="checkbox"> 장 상태를 마감으로 변경</label>
+      <button class="purple" onclick="updateStockSettings()">설정 저장</button>
+    </div>
+
+    <div class="stockPanelV4">
+      <h3>수수료 현황</h3>
+      <div class="grid3">
+        <div class="mini"><h3>총 수수료</h3><strong>${formatMoney(s.stockFeeTotal || 0)}</strong></div>
+        <div class="mini"><h3>소멸</h3><strong>${formatMoney(s.stockFeeBurned || 0)}</strong></div>
+        <div class="mini"><h3>펀딩 적립</h3><strong>${formatMoney(s.stockFeeFunding || 0)}</strong></div>
+      </div>
+    </div>`;
+
+  requestAnimationFrame(() => renderStockChartV4("adminStockChartV4", s.priceHistory, prices.currentPrice));
+  startStockAutoTickV4(stock);
+}
+
+window.startStockTarget = async () => actionStatus("adminStockStatus", "updateStockSettings", {
+  startTarget: true,
+  targetPrice: stockSettingValueV4("stockTargetPrice"),
+  targetDurationMinutes: stockSettingValueV4("stockTargetDurationMinutes")
+}, loadAdminStock);
+
+window.clearStockTarget = async () => actionStatus("adminStockStatus", "updateStockSettings", {
+  clearTarget: true
+}, loadAdminStock);
+
+window.teacherBuyStock = async () => actionStatus("adminStockStatus", "teacherBuyStock", {
+  shares: stockSettingValueV4("teacherBuyShares")
+}, loadAdminStock);
+
+window.teacherSellStock = async () => actionStatus("adminStockStatus", "teacherSellStock", {
+  shares: stockSettingValueV4("teacherSellShares")
+}, loadAdminStock);
+
+window.updateStockSettings = async () => actionStatus("adminStockStatus", "updateStockSettings", {
+  currentPrice: stockSettingValueV4("stockSetCurrentPrice"),
+  marketTrend: currentSelectedStockTrendV4(stockLastAdminStockV4),
+  updateIntervalSeconds: stockSettingValueV4("stockSetUpdateIntervalSeconds"),
+  marketShares: stockSettingValueV4("stockSetMarketShares"),
+  teacherShares: stockSettingValueV4("stockSetTeacherShares"),
+  exchangeFund: stockSettingValueV4("stockSetExchangeFund"),
+  perStudentLimit: stockSettingValueV4("stockSetPerStudentLimit"),
+  priceWeight: stockSettingValueV4("stockSetPriceWeight"),
+  trendMoveStep: stockSettingValueV4("stockSetTrendMoveStep"),
+  tradeImpactShares: stockSettingValueV4("stockSetTradeImpactShares"),
+  tradeImpactMaxMove: stockSettingValueV4("stockSetTradeImpactMaxMove"),
+  maxTickMove: stockSettingValueV4("stockSetMaxTickMove"),
+  dailyLimitRate: stockSettingValueV4("stockSetDailyLimitRate"),
+  minPrice: stockSettingValueV4("stockSetMinPrice"),
+  maxPrice: stockSettingValueV4("stockSetMaxPrice"),
+  baseSpread: stockSettingValueV4("stockSetBaseSpread"),
+  volatileSpread: stockSettingValueV4("stockSetVolatileSpread"),
+  buyFeeRate: stockSettingValueV4("stockSetBuyFeeRate"),
+  sellFeeRate: stockSettingValueV4("stockSetSellFeeRate"),
+  feeMode: stockSettingValueV4("stockSetFeeMode"),
+  linkedFundingCampaignId: stockSettingValueV4("stockSetLinkedFundingCampaignId"),
+  resetDayCounters: stockSettingCheckedV4("stockSetResetDay"),
+  forceCloseMarket: stockSettingCheckedV4("stockSetForceClose")
+}, loadAdminStock);
+
+renderAdminStock = renderAdminStockTargetEngineFinalV5;
