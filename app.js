@@ -1477,8 +1477,10 @@ function renderStockBreakingNewsV6(newsList) {
       <p class="small">선생님이 뉴스를 등록하면 이곳에 가장 먼저 표시됩니다.</p>
     </div>`;
   }
-  const main = list[0];
-  const rest = list.slice(1);
+  const manualMain = list.find(n => n?.type === "MANUAL");
+  const nonCloseMain = list.find(n => n?.type !== "CLOSE_MARKET");
+  const main = manualMain || nonCloseMain || list[0];
+  const rest = list.filter(n => n !== main);
   return `<div class="stockPanelV4 stockBreakingNewsV6">
     <div class="stockBreakingLabelV6">오늘의 속보</div>
     <h2>${escapeHtml(main.title || "새 뉴스")}</h2>
